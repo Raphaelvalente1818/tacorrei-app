@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/AuthContext'
 import type { OrigemLead } from '../lib/database.types'
 
 const ORIGENS: Array<{ value: OrigemLead; label: string }> = [
@@ -22,8 +23,12 @@ export default function NovoLeadModal({
   onClose: () => void
   onCreated: () => void
 }) {
+  const { membro, unidades, unidadeAtiva } = useAuth()
+  const isAdmin = membro?.papel === 'admin'
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
+  // Admin escolhe em qual unidade o lead entra (padrão: a unidade ativa no menu).
+  const [unidadeId, setUnidadeId] = useState<string>(unidadeAtiva ?? '')
   const [cidade, setCidade] = useState('')
   const [uf, setUf] = useState('')
   const [placa, setPlaca] = useState('')
@@ -38,9 +43,13 @@ export default function NovoLeadModal({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setSaving(true)
     setError(null)
-    const { error } = await supabase.from('caminhoneiros').insert({
+    if (isAdmin && !unidadeId) {
+      setError('Escolha a unidade em que o lead deve entrar.')
+      return
+    }
+    setSaving(true)
+    const registro: Record<string, unknown> = {
       nome,
       telefone,
       cidade: cidade || null,
@@ -52,7 +61,10 @@ export default function NovoLeadModal({
       data_ultima_afericao: ultimaAfericao || null,
       observacoes: observacoes || null,
       origem,
-    })
+    }
+    // Admin grava a unidade escolhida. Operador não envia: o gatilho preenche com a dele.
+    if (isAdmin && unidadeId) registro.unidade_id = unidadeId
+    const { error } = await supabase.from('caminhoneiros').insert(registro)
     setSaving(false)
     if (error) {
       setError(error.message)
@@ -72,6 +84,24 @@ export default function NovoLeadModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          {isAdmin && (
+            <div>
+              <label className={labelCls}>Unidade *</label>
+              <select
+                required
+                value={unidadeId}
+                onChange={(e) => setUnidadeId(e.target.value)}
+                className={`${inputCls} bg-card`}
+              >
+                <option value="">Selecione a unidade…</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className={labelCls}>Nome *</label>
             <input required value={nome} onChange={(e) => setNome(e.target.value)} className={inputCls} />

@@ -54,7 +54,7 @@ export default function RedefinirSenha() {
             <KeyRound size={26} />
           </div>
           <h1 className="text-lg font-extrabold text-ink">Redefinir senha</h1>
-          <p className="text-sm text-ink-4">App Tacógrafo</p>
+          <p className="text-sm text-ink-4">Lacre Tacógrafos</p>
         </div>
 
         {ok ? (

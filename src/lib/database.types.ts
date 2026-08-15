@@ -79,7 +79,14 @@ export interface EquipeMembro {
   nome: string
   papel: 'admin' | 'operador'
   ativo: boolean
+  unidade_id: string | null
+  email: string | null
   created_at: string
+}
+
+export interface Unidade {
+  id: string
+  nome: string
 }
 
 // Placeholder mínimo para satisfazer o generic do supabase-js.

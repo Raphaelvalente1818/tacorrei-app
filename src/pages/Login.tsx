@@ -47,7 +47,7 @@ export default function Login() {
           <div className="w-14 h-14 rounded-2xl bg-brand text-white flex items-center justify-center text-2xl font-extrabold mb-3">
             T
           </div>
-          <h1 className="text-lg font-extrabold text-ink">App Tacógrafo</h1>
+          <h1 className="text-lg font-extrabold text-ink">Lacre Tacógrafos</h1>
           <p className="text-sm text-ink-4">Painel de ligações e aferições</p>
         </div>
 

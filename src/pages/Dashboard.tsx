@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Users, PhoneCall, CalendarClock, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useFiltroUnidade } from '../lib/AuthContext'
 import type { StatusLead } from '../lib/database.types'
 
 const FUNIL_ORDEM: Array<{ status: StatusLead; label: string }> = [
@@ -39,33 +40,39 @@ function StatTile({
   )
 }
 
-async function contar(status?: StatusLead): Promise<number> {
+async function contar(unidadeId: string | null, status?: StatusLead): Promise<number> {
   // Conta apenas o público-alvo (veículos com tacógrafo); ignora os "sem tacógrafo".
   let query = supabase
     .from('caminhoneiros')
     .select('*', { count: 'exact', head: true })
     .eq('tem_tacografo', true)
+  if (unidadeId) query = query.eq('unidade_id', unidadeId)
   if (status) query = query.eq('status', status)
   const { count } = await query
   return count ?? 0
 }
 
 export default function Dashboard() {
+  const filtroUnidade = useFiltroUnidade()
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [porStatus, setPorStatus] = useState<Record<string, number>>({})
 
   useEffect(() => {
     ;(async () => {
+      setLoading(true)
       const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
-      const [tot, ...counts] = await Promise.all([contar(), ...statuses.map((s) => contar(s))])
+      const [tot, ...counts] = await Promise.all([
+        contar(filtroUnidade),
+        ...statuses.map((s) => contar(filtroUnidade, s)),
+      ])
       const map: Record<string, number> = {}
       statuses.forEach((s, i) => (map[s] = counts[i]))
       setTotal(tot)
       setPorStatus(map)
       setLoading(false)
     })()
-  }, [])
+  }, [filtroUnidade])
 
   const contatados = total - (porStatus['novo'] ?? 0)
   const agendados = porStatus['agendado'] ?? 0

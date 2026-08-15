@@ -8,6 +8,7 @@ import LeadDetail from './pages/LeadDetail'
 import Agenda from './pages/Agenda'
 import TrocarSenha from './pages/TrocarSenha'
 import RedefinirSenha from './pages/RedefinirSenha'
+import Admin from './pages/Admin'
 
 function PrivateArea() {
   const { session, loading } = useAuth()
@@ -29,6 +30,7 @@ function PrivateArea() {
         <Route path="leads" element={<Leads />} />
         <Route path="leads/:id" element={<LeadDetail />} />
         <Route path="agenda" element={<Agenda />} />
+        <Route path="admin" element={<Admin />} />
         <Route path="trocar-senha" element={<TrocarSenha />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

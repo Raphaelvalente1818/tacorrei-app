@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import type { Caminhoneiro, StatusLead } from '../lib/database.types'
 import { STATUS_LEAD_CLASSES, STATUS_LEAD_LABEL } from '../lib/status'
 import Badge from '../components/Badge'
@@ -42,6 +43,11 @@ function vencimento(iso: string | null): { texto: string; classe: string } | nul
 }
 
 export default function Leads() {
+  const { membro } = useAuth()
+  const filtroUnidade = useFiltroUnidade()
+  const isAdmin = membro?.papel === 'admin'
+  // A fila "Sem tacógrafo" é só para o admin; a funcionária não vê esse público.
+  const filtros = FILTROS.filter((f) => f.value !== 'sem_tacografo' || isAdmin)
   const [leads, setLeads] = useState<Caminhoneiro[]>([])
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState<FiltroLead>('todos')
@@ -57,16 +63,19 @@ export default function Leads() {
     return () => clearTimeout(t)
   }, [busca])
 
-  // ao mudar filtro/busca, volta pra primeira página
+  // ao mudar filtro/busca/unidade, volta pra primeira página
   useEffect(() => {
     setPage(0)
-  }, [filtro, buscaDebounced])
+  }, [filtro, buscaDebounced, filtroUnidade])
 
   const carregar = useCallback(async () => {
     setLoading(true)
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     let query = supabase.from('caminhoneiros').select('*', { count: 'exact' })
+
+    // Admin pode focar numa unidade; a funcionária já é limitada pelo RLS.
+    if (filtroUnidade) query = query.eq('unidade_id', filtroUnidade)
 
     if (filtro === 'sem_tacografo') {
       // fila separada: veículos sem tacógrafo (fora do público-alvo)
@@ -93,7 +102,7 @@ export default function Leads() {
     setLeads((data as Caminhoneiro[]) ?? [])
     setTotal(count ?? 0)
     setLoading(false)
-  }, [page, filtro, buscaDebounced])
+  }, [page, filtro, buscaDebounced, filtroUnidade])
 
   useEffect(() => {
     carregar()
@@ -130,7 +139,7 @@ export default function Leads() {
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {FILTROS.map((f) => (
+          {filtros.map((f) => (
             <button
               key={f.value}
               onClick={() => setFiltro(f.value)}

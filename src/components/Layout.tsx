@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Phone, CalendarClock, LogOut, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Phone, CalendarClock, LogOut, KeyRound, Shield, Building2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 const NAV = [
@@ -9,7 +9,8 @@ const NAV = [
 ]
 
 export default function Layout() {
-  const { membro, user, signOut } = useAuth()
+  const { membro, user, signOut, unidades, unidadeAtiva, setUnidadeAtiva } = useAuth()
+  const isAdmin = membro?.papel === 'admin'
 
   return (
     <div className="min-h-screen flex bg-bg">
@@ -20,11 +21,37 @@ export default function Layout() {
               T
             </div>
             <div>
-              <div className="text-sm font-extrabold text-ink leading-tight">App Tacógrafo</div>
+              <div className="text-sm font-extrabold text-ink leading-tight">Lacre Tacógrafos</div>
               <div className="text-[11px] text-ink-4">Painel interno</div>
             </div>
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="px-3 pt-4">
+            <label className="block text-[10px] font-bold uppercase tracking-wide text-ink-4 mb-1 px-1">
+              Unidade
+            </label>
+            <div className="relative">
+              <Building2
+                size={15}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-4 pointer-events-none"
+              />
+              <select
+                value={unidadeAtiva ?? ''}
+                onChange={(e) => setUnidadeAtiva(e.target.value || null)}
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-xl text-sm font-semibold text-ink bg-card focus-ring outline-none appearance-none"
+              >
+                <option value="">Todas as unidades</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV.map((item) => (
@@ -44,6 +71,22 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-blue-50 text-brand-d'
+                    : 'text-ink-6 hover:bg-slate-50'
+                }`
+              }
+            >
+              <Shield size={17} strokeWidth={2.2} />
+              Admin
+            </NavLink>
+          )}
         </nav>
 
         <div className="px-3 py-4 border-t border-line">

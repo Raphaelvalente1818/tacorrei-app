@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useFiltroUnidade } from '../lib/AuthContext'
 import { STATUS_AGENDAMENTO_CLASSES, STATUS_AGENDAMENTO_LABEL } from '../lib/status'
 import type { StatusAgendamento } from '../lib/database.types'
 
@@ -16,22 +17,25 @@ interface AgendamentoComLead {
 const STATUS_OPCOES: StatusAgendamento[] = ['agendado', 'confirmado', 'realizado', 'cancelado', 'nao_compareceu']
 
 export default function Agenda() {
+  const filtroUnidade = useFiltroUnidade()
   const [itens, setItens] = useState<AgendamentoComLead[]>([])
   const [loading, setLoading] = useState(true)
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    let query = supabase
       .from('agendamentos')
       .select('id, data_hora, local, status, caminhoneiro_id, caminhoneiros ( nome, telefone )')
       .order('data_hora', { ascending: true })
+    if (filtroUnidade) query = query.eq('unidade_id', filtroUnidade)
+    const { data } = await query
     setItens((data as unknown as AgendamentoComLead[]) ?? [])
     setLoading(false)
-  }
+  }, [filtroUnidade])
 
   useEffect(() => {
     carregar()
-  }, [])
+  }, [carregar])
 
   async function atualizarStatus(id: string, status: StatusAgendamento) {
     await supabase.from('agendamentos').update({ status }).eq('id', id)
