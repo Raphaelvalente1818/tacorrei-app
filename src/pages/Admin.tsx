@@ -90,6 +90,7 @@ function num(n: number) {
 }
 
 function Producao() {
+  const { unidades: unidadesCtx, unidadeAtiva } = useAuth()
   const [dias, setDias] = useState<number | null>(30)
   const [unidades, setUnidades] = useState<ProdUnidade[]>([])
   const [operadores, setOperadores] = useState<ProdOperador[]>([])
@@ -109,6 +110,11 @@ function Producao() {
   useEffect(() => {
     carregar()
   }, [carregar])
+
+  // Respeita a unidade em foco no menu ("Visualizando"). Sem foco = todas (comparação).
+  const focoNome = unidadeAtiva ? unidadesCtx.find((u) => u.id === unidadeAtiva)?.nome ?? null : null
+  const unidadesView = unidadeAtiva ? unidades.filter((u) => u.id === unidadeAtiva) : unidades
+  const operadoresView = focoNome ? operadores.filter((o) => o.unidade === focoNome) : operadores
 
   return (
     <div className="space-y-6">
@@ -145,7 +151,7 @@ function Producao() {
                 </tr>
               </thead>
               <tbody>
-                {unidades.map((u) => (
+                {unidadesView.map((u) => (
                   <tr key={u.id} className="border-b border-line last:border-0">
                     <td className="px-5 py-3 font-semibold text-ink">{u.nome}</td>
                     <td className="px-5 py-3 text-right text-ink-6">{num(u.leads)}</td>
@@ -158,7 +164,7 @@ function Producao() {
                     </td>
                   </tr>
                 ))}
-                {unidades.length === 0 && (
+                {unidadesView.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-5 py-4 text-sm text-ink-4">
                       Nenhuma unidade.
@@ -182,7 +188,7 @@ function Producao() {
                 </tr>
               </thead>
               <tbody>
-                {operadores.map((o, i) => (
+                {operadoresView.map((o, i) => (
                   <tr key={i} className="border-b border-line last:border-0">
                     <td className="px-5 py-3 font-semibold text-ink">
                       {o.operador}
@@ -194,7 +200,7 @@ function Producao() {
                     <td className="px-5 py-3 text-right text-ink-6">{num(o.agendados)}</td>
                   </tr>
                 ))}
-                {operadores.length === 0 && (
+                {operadoresView.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-5 py-4 text-sm text-ink-4">
                       Ninguém na equipe ainda.
