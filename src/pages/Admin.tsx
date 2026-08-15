@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, Building2, Users, Plus, Check, Pencil } from 'lucide-react'
+import { BarChart3, Building2, Users, Plus, Check, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
@@ -43,6 +43,10 @@ interface Membro {
 
 type Aba = 'producao' | 'unidades' | 'acessos'
 
+const tabBase = 'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors'
+const tabOn = 'bg-brand text-[#04120a] border-brand'
+const tabOff = 'bg-card text-ink-6 border-line hover:bg-white/5'
+
 export default function Admin() {
   const { membro } = useAuth()
   const [aba, setAba] = useState<Aba>('producao')
@@ -68,13 +72,7 @@ export default function Admin() {
           { id: 'unidades', label: 'Unidades', icon: Building2 },
           { id: 'acessos', label: 'Acessos', icon: Users },
         ] as const).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setAba(t.id)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors ${
-              aba === t.id ? 'bg-brand text-white border-brand' : 'bg-card text-ink-6 border-line hover:bg-slate-50'
-            }`}
-          >
+          <button key={t.id} onClick={() => setAba(t.id)} className={`${tabBase} ${aba === t.id ? tabOn : tabOff}`}>
             <t.icon size={16} /> {t.label}
           </button>
         ))}
@@ -120,7 +118,7 @@ function Producao() {
             key={p.label}
             onClick={() => setDias(p.dias)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              dias === p.dias ? 'bg-brand text-white border-brand' : 'bg-card text-ink-6 border-line hover:bg-slate-50'
+              dias === p.dias ? 'bg-brand text-[#04120a] border-brand' : 'bg-card text-ink-6 border-line hover:bg-white/5'
             }`}
           >
             {p.label}
@@ -270,7 +268,7 @@ function Unidades() {
           <button
             onClick={criar}
             disabled={salvando}
-            className="flex items-center gap-1.5 bg-brand text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-d transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 bg-brand text-[#04120a] text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-d transition-colors disabled:opacity-60"
           >
             <Plus size={16} /> Criar
           </button>
@@ -337,6 +335,7 @@ function Unidades() {
 }
 
 function Acessos() {
+  const { unidades: unidadesCtx, unidadeAtiva } = useAuth()
   const [membros, setMembros] = useState<Membro[]>([])
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [loading, setLoading] = useState(true)
@@ -346,7 +345,7 @@ function Acessos() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [papel, setPapel] = useState<'admin' | 'operador'>('operador')
-  const [unidadeId, setUnidadeId] = useState('')
+  const [unidadeId, setUnidadeId] = useState(unidadeAtiva ?? '')
   const [criando, setCriando] = useState(false)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
 
@@ -359,17 +358,40 @@ function Acessos() {
     setMembros((m.data as Membro[]) ?? [])
     const uni = (u.data as Unidade[]) ?? []
     setUnidades(uni)
-    if (!unidadeId && uni.length) setUnidadeId(uni[0].id)
+    if (!unidadeId && uni.length) setUnidadeId(unidadeAtiva ?? uni[0].id)
     setLoading(false)
-  }, [unidadeId])
+  }, [unidadeId, unidadeAtiva])
 
   useEffect(() => {
     carregar()
   }, [carregar])
 
+  // Ao trocar a unidade "em foco" no menu, o formulário de novo acesso acompanha.
+  useEffect(() => {
+    if (unidadeAtiva) setUnidadeId(unidadeAtiva)
+  }, [unidadeAtiva])
+
   async function atualizar(user_id: string, campos: Partial<Membro>) {
     await supabase.from('equipe').update(campos).eq('user_id', user_id)
     setMembros((prev) => prev.map((m) => (m.user_id === user_id ? { ...m, ...campos } : m)))
+  }
+
+  async function excluir(m: Membro) {
+    if (
+      !window.confirm(
+        `Excluir definitivamente o acesso de ${m.nome}? O login será apagado. O histórico de ligações/agendamentos é mantido (fica sem dono).`
+      )
+    )
+      return
+    const { data, error } = await supabase.functions.invoke('admin-excluir-usuario', {
+      body: { user_id: m.user_id },
+    })
+    const erro = error ? error.message : (data as { error?: string })?.error
+    if (erro) {
+      setMsg({ tipo: 'erro', texto: erro })
+      return
+    }
+    setMembros((prev) => prev.filter((x) => x.user_id !== m.user_id))
   }
 
   async function criarAcesso() {
@@ -396,13 +418,22 @@ function Acessos() {
     carregar()
   }
 
-  const nomeUnidade = (id: string | null) => unidades.find((u) => u.id === id)?.nome ?? '—'
+  const nomeUnidade = (id: string | null) =>
+    (unidadesCtx.find((u) => u.id === id)?.nome ?? unidades.find((u) => u.id === id)?.nome) ?? '—'
+
+  // Filtra pela unidade em foco no menu ("Visualizando"). Sem foco = todas.
+  const visiveis = unidadeAtiva ? membros.filter((m) => m.unidade_id === unidadeAtiva) : membros
 
   return (
     <div className="space-y-4">
       <div className="card p-4">
-        <div className="text-sm font-extrabold text-ink mb-3">Novo acesso</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="text-sm font-extrabold text-ink mb-1">Novo acesso</div>
+        {unidadeAtiva && (
+          <p className="text-xs text-lucro mb-2">
+            Entra em <b>{nomeUnidade(unidadeAtiva)}</b> (unidade em foco no menu).
+          </p>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome"
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" type="email"
@@ -425,7 +456,7 @@ function Acessos() {
         </div>
         <div className="flex items-center gap-3 mt-3">
           <button onClick={criarAcesso} disabled={criando}
-            className="flex items-center gap-1.5 bg-brand text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-d transition-colors disabled:opacity-60">
+            className="flex items-center gap-1.5 bg-brand text-[#04120a] text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-d transition-colors disabled:opacity-60">
             <Plus size={16} /> {criando ? 'Criando…' : 'Criar acesso'}
           </button>
           {msg && <span className={`text-sm ${msg.tipo === 'ok' ? 'text-lucro' : 'text-danger'}`}>{msg.texto}</span>}
@@ -434,6 +465,10 @@ function Acessos() {
       </div>
 
       <div className="card overflow-hidden">
+        <div className="px-5 py-3 border-b border-line text-xs text-ink-4">
+          {visiveis.length} {visiveis.length === 1 ? 'pessoa' : 'pessoas'}
+          {unidadeAtiva ? ` em ${nomeUnidade(unidadeAtiva)}` : ' (equipe inteira)'}
+        </div>
         {loading ? (
           <p className="p-6 text-sm text-ink-4">Carregando…</p>
         ) : (
@@ -445,10 +480,11 @@ function Acessos() {
                 <th className="px-5 py-3">Unidade</th>
                 <th className="px-5 py-3">Papel</th>
                 <th className="px-5 py-3">Ativo</th>
+                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {membros.map((m) => (
+              {visiveis.map((m) => (
                 <tr key={m.user_id} className="border-b border-line last:border-0">
                   <td className="px-5 py-3 font-semibold text-ink">{m.nome}</td>
                   <td className="px-5 py-3 text-ink-6">{m.email ?? '—'}</td>
@@ -479,21 +515,35 @@ function Acessos() {
                       onClick={() => atualizar(m.user_id, { ativo: !m.ativo })}
                       className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
                         m.ativo
-                          ? 'bg-emerald-50 text-lucro border-emerald-200'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
                       }`}
                     >
                       {m.ativo ? 'Ativo' : 'Inativo'}
                     </button>
                   </td>
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      onClick={() => excluir(m)}
+                      className="text-ink-4 hover:text-rose-400"
+                      title="Excluir acesso definitivamente"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
+              {visiveis.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-4 text-sm text-ink-4">Nenhum acesso nesta unidade.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
       </div>
       <p className="text-xs text-ink-4">
-        Dica: {nomeUnidade(unidadeId)} é a unidade selecionada para novos acessos. Desativar bloqueia o login sem apagar o histórico.
+        <b>Desativar</b> bloqueia o login sem apagar o histórico. <b>Excluir</b> (lixeira) apaga o acesso de vez — o histórico de ligações/agendamentos fica preservado, porém sem dono.
       </p>
     </div>
   )

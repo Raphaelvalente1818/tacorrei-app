@@ -66,7 +66,7 @@ export default function Agenda() {
             </thead>
             <tbody>
               {itens.map((a) => (
-                <tr key={a.id} className="border-b border-line last:border-0 hover:bg-slate-50">
+                <tr key={a.id} className="border-b border-line last:border-0 hover:bg-white/5">
                   <td className="px-5 py-3 font-semibold text-ink">
                     {new Date(a.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                   </td>

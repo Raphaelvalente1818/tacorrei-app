@@ -1,27 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  /* Tokens reaproveitados do design system do RODE COM LUCRO */
-  --color-brand: #2563eb;
-  --color-brand-d: #1e40af;
-  --color-ink: #0f172a;
-  --color-ink-6: #475569;
-  --color-ink-4: #94a3b8;
-  --color-line: #e2e8f0;
-  --color-card: #ffffff;
-  --color-bg: #f1f5f9;
-  --color-lucro: #059669;
-  --color-warn: #d97706;
-  --color-danger: #dc2626;
+  /* Tema escuro — inspirado no Rode com Lucro (verde principal, azul/âmbar de apoio) */
+  --color-brand: #22c55e;       /* verde — cor principal (ativo, botões) */
+  --color-brand-d: #16a34a;     /* verde escuro — hover */
+  --color-blue: #3f57ff;        /* azul de apoio */
+  --color-ink: #f3f6fb;         /* texto principal (claro) */
+  --color-ink-6: #93a0b8;       /* texto secundário */
+  --color-ink-4: #5f6b83;       /* texto apagado */
+  --color-line: #232c40;        /* bordas */
+  --color-card: #141b2a;        /* cartões */
+  --color-card2: #182031;       /* cartão alternativo / hover */
+  --color-panel: #0e1421;       /* menu lateral */
+  --color-bg: #0a0e16;          /* fundo da página */
+  --color-lucro: #22c55e;       /* sucesso (verde) */
+  --color-warn: #f2a63b;        /* aviso (âmbar) */
+  --color-danger: #f87171;      /* erro (vermelho claro p/ escuro) */
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
 
-  --radius-card: 16px;
+  --radius-card: 18px;
   --radius-pill: 999px;
 }
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 body {
@@ -52,15 +56,28 @@ body {
 
 .badge {
   display: inline-block;
-  background: #eff6ff;
-  color: var(--color-brand-d);
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--color-lucro);
   border-radius: 6px;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 800;
 }
 
+/* inputs/selects escuros por padrão */
+input, select, textarea {
+  color: var(--color-ink);
+  background: var(--color-card);
+}
+input::placeholder, textarea::placeholder { color: var(--color-ink-4); }
+select option { background: var(--color-card); color: var(--color-ink); }
+
 .focus-ring:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
+
+/* scrollbar discreta no tema escuro */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #29344a; border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }

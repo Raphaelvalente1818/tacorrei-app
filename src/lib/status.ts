@@ -11,15 +11,16 @@ export const STATUS_LEAD_LABEL: Record<StatusLead, string> = {
   invalido: 'Inválido',
 }
 
+// Cores dos selos no tema escuro (fundo translúcido + texto claro)
 export const STATUS_LEAD_CLASSES: Record<StatusLead, string> = {
-  novo: 'bg-slate-100 text-slate-700 border-slate-200',
-  mensagem_enviada: 'bg-teal-50 text-teal-700 border-teal-200',
-  contatado: 'bg-blue-50 text-brand-d border-blue-200',
-  sem_resposta: 'bg-amber-50 text-amber-700 border-amber-200',
-  agendado: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  aferido: 'bg-emerald-50 text-lucro border-emerald-200',
-  recusado: 'bg-rose-50 text-rose-700 border-rose-200',
-  invalido: 'bg-slate-100 text-slate-500 border-slate-200',
+  novo: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  mensagem_enviada: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  contatado: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  sem_resposta: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  agendado: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  aferido: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  recusado: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  invalido: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
 }
 
 export const RESULTADO_LIGACAO_LABEL: Record<ResultadoLigacao, string> = {
@@ -47,9 +48,9 @@ export const STATUS_AGENDAMENTO_LABEL: Record<StatusAgendamento, string> = {
 }
 
 export const STATUS_AGENDAMENTO_CLASSES: Record<StatusAgendamento, string> = {
-  agendado: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  confirmado: 'bg-blue-50 text-brand-d border-blue-200',
-  realizado: 'bg-emerald-50 text-lucro border-emerald-200',
-  cancelado: 'bg-rose-50 text-rose-700 border-rose-200',
-  nao_compareceu: 'bg-amber-50 text-amber-700 border-amber-200',
+  agendado: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  confirmado: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  realizado: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  cancelado: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  nao_compareceu: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
 }

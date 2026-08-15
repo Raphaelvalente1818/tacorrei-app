@@ -37,8 +37,8 @@ function vencimento(iso: string | null): { texto: string; classe: string } | nul
   const dias = Math.round((venc.getTime() - hoje.getTime()) / 86400000)
   const texto = `${String(venc.getDate()).padStart(2, '0')}/${String(venc.getMonth() + 1).padStart(2, '0')}/${venc.getFullYear()}`
   let classe = 'text-ink-6'
-  if (dias < 0) classe = 'text-rose-600 font-bold'
-  else if (dias <= 60) classe = 'text-amber-600 font-bold'
+  if (dias < 0) classe = 'text-rose-400 font-bold'
+  else if (dias <= 60) classe = 'text-amber-400 font-bold'
   return { texto, classe }
 }
 
@@ -146,7 +146,7 @@ export default function Leads() {
               className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
                 filtro === f.value
                   ? 'bg-brand text-white border-brand'
-                  : 'bg-card text-ink-6 border-line hover:bg-slate-50'
+                  : 'bg-card text-ink-6 border-line hover:bg-white/5'
               }`}
             >
               {f.label}
@@ -175,7 +175,7 @@ export default function Leads() {
               {leads.map((lead) => {
                 const venc = vencimento(lead.data_ultima_afericao)
                 return (
-                  <tr key={lead.id} className="border-b border-line last:border-0 hover:bg-slate-50">
+                  <tr key={lead.id} className="border-b border-line last:border-0 hover:bg-white/5">
                     <td className="px-5 py-3">
                       <Link to={`/leads/${lead.id}`} className="font-semibold text-brand-d hover:underline">
                         {lead.nome}
@@ -213,14 +213,14 @@ export default function Leads() {
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={!temAnterior}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-slate-50"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-white/5"
               >
                 <ChevronLeft size={15} /> Anterior
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={!temProxima}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-slate-50"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-white/5"
               >
                 Próxima <ChevronRight size={15} />
               </button>

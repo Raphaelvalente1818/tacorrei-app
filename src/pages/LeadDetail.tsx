@@ -254,17 +254,17 @@ export default function LeadDetail() {
       </Link>
 
       {alerta && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <span className="flex-1">{alerta}</span>
-          <button onClick={() => setAlerta(null)} className="text-amber-700 hover:text-amber-900">
+          <button onClick={() => setAlerta(null)} className="text-amber-400 hover:text-amber-200">
             <X size={16} />
           </button>
         </div>
       )}
 
       {lead.tem_tacografo === false && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-slate-500/30 bg-slate-500/10 px-4 py-3 text-sm text-slate-300">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <span>
             Veículo <b>sem tacógrafo</b> (tipo "NENHUM RESULTADO"). Fora do público-alvo — não enviar
@@ -369,7 +369,7 @@ export default function LeadDetail() {
                     {info && (
                       <span
                         className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                          vencido ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-lucro'
+                          vencido ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'
                         }`}
                       >
                         {vencido ? `Vencido em ${fmtDia(info.venc)}` : `Vence em ${fmtDia(info.venc)}`}
@@ -391,7 +391,7 @@ export default function LeadDetail() {
             </div>
 
             {lead.data_ultimo_whatsapp && (
-              <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+              <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
                 <MessageCircle size={14} /> WhatsApp enviado em{' '}
                 {new Date(lead.data_ultimo_whatsapp).toLocaleDateString('pt-BR')}
               </div>
@@ -405,7 +405,7 @@ export default function LeadDetail() {
                 onClick={abrirWhatsapp}
                 className={`flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl transition-colors ${
                   lead.tem_tacografo === false || lead.whatsapp_invalido
-                    ? 'border border-line bg-card text-ink-4 hover:bg-slate-50'
+                    ? 'border border-line bg-card text-ink-4 hover:bg-white/5'
                     : 'bg-lucro text-white hover:opacity-90'
                 }`}
                 title={
@@ -421,7 +421,7 @@ export default function LeadDetail() {
               {lead.whatsapp_invalido ? (
                 <button
                   onClick={desmarcarSemWhatsapp}
-                  className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-800 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-amber-100 transition-colors"
+                  className="flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-amber-500/20 transition-colors"
                   title="Número marcado como sem WhatsApp. Clique para desmarcar (foi engano)."
                 >
                   <Ban size={16} /> Sem WhatsApp
@@ -429,7 +429,7 @@ export default function LeadDetail() {
               ) : (
                 <button
                   onClick={marcarSemWhatsapp}
-                  className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                  className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-white/5 transition-colors"
                   title="Marcar que este número não tem WhatsApp (desfaz o último envio registrado)"
                 >
                   <Ban size={16} /> Não é WhatsApp
@@ -437,7 +437,7 @@ export default function LeadDetail() {
               )}
               <button
                 onClick={() => setShowAgendar(true)}
-                className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-white/5 transition-colors"
               >
                 <CalendarPlus size={16} /> Agendar aferição
               </button>
@@ -487,7 +487,7 @@ export default function LeadDetail() {
                         </span>
                         <button
                           onClick={() => deletarContato(l)}
-                          className="text-ink-4 hover:text-rose-600"
+                          className="text-ink-4 hover:text-rose-400"
                           title="Excluir este registro de contato"
                         >
                           <Trash2 size={14} />
@@ -528,7 +528,7 @@ export default function LeadDetail() {
       </div>
 
       {showWhats && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <div className="card w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-extrabold text-ink flex items-center gap-2">
@@ -551,7 +551,7 @@ export default function LeadDetail() {
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowWhats(false)}
-                className="px-4 py-2 rounded-xl border border-line text-sm font-bold text-ink-6 hover:bg-slate-50"
+                className="px-4 py-2 rounded-xl border border-line text-sm font-bold text-ink-6 hover:bg-white/5"
               >
                 Cancelar
               </button>

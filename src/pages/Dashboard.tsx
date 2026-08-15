@@ -92,10 +92,10 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatTile icon={Users} label="Leads totais" value={total} accent="#2563eb" />
-            <StatTile icon={PhoneCall} label="Contatados" value={contatados} accent="#1e40af" />
-            <StatTile icon={CalendarClock} label="Agendados" value={agendados} accent="#4f46e5" />
-            <StatTile icon={CheckCircle2} label="Aferidos" value={aferidos} accent="#059669" />
+            <StatTile icon={Users} label="Leads totais" value={total} accent="#3f57ff" />
+            <StatTile icon={PhoneCall} label="Contatados" value={contatados} accent="#0ea5e9" />
+            <StatTile icon={CalendarClock} label="Agendados" value={agendados} accent="#f2a63b" />
+            <StatTile icon={CheckCircle2} label="Aferidos" value={aferidos} accent="#22c55e" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -103,22 +103,22 @@ export default function Dashboard() {
               <h2 className="text-sm font-extrabold text-ink mb-4">Funil de conversão</h2>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={funil} layout="vertical" margin={{ left: 8, right: 24 }}>
-                  <CartesianGrid horizontal={false} stroke="#e2e8f0" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <CartesianGrid horizontal={false} stroke="#232c40" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#93a0b8' }} axisLine={false} tickLine={false} />
                   <YAxis
                     type="category"
                     dataKey="label"
                     width={90}
-                    tick={{ fontSize: 13, fill: '#0f172a', fontWeight: 600 }}
+                    tick={{ fontSize: 13, fill: '#cbd5e1', fontWeight: 600 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
-                    cursor={{ fill: '#f1f5f9' }}
-                    contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13 }}
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #232c40', background: '#141b2a', color: '#f3f6fb', fontSize: 13 }}
                   />
-                  <Bar dataKey="total" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={28}>
-                    <LabelList dataKey="total" position="right" style={{ fill: '#0f172a', fontWeight: 700, fontSize: 12 }} />
+                  <Bar dataKey="total" fill="#22c55e" radius={[0, 4, 4, 0]} barSize={28}>
+                    <LabelList dataKey="total" position="right" style={{ fill: '#e2e8f0', fontWeight: 700, fontSize: 12 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

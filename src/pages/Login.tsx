@@ -44,10 +44,17 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-brand text-white flex items-center justify-center text-2xl font-extrabold mb-3">
-            T
+          <div className="relative mb-3">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand to-brand-d text-[#04120a] flex items-center justify-center text-4xl font-extrabold shadow-xl shadow-brand/30">
+              A
+            </div>
+            <span className="absolute -right-1.5 -top-1.5 w-7 h-7 rounded-lg bg-bg text-brand text-lg font-black flex items-center justify-center border-2 border-brand leading-none">
+              +
+            </span>
           </div>
-          <h1 className="text-lg font-extrabold text-ink">Lacre Tacógrafos</h1>
+          <h1 className="text-lg font-extrabold text-ink">
+            Aferi<span className="text-lucro">+</span>
+          </h1>
           <p className="text-sm text-ink-4">Painel de ligações e aferições</p>
         </div>
 
