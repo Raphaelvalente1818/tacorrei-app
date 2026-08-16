@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, Building2, Users, Plus, Check, Pencil, Trash2 } from 'lucide-react'
+import { BarChart3, Building2, Users, Plus, Check, Pencil, Trash2, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
@@ -41,7 +41,7 @@ interface Membro {
   unidade_id: string | null
 }
 
-type Aba = 'producao' | 'unidades' | 'acessos'
+type Aba = 'producao' | 'unidades' | 'cobertura' | 'acessos'
 
 const tabBase = 'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors'
 const tabOn = 'bg-brand text-[#04120a] border-brand'
@@ -70,6 +70,7 @@ export default function Admin() {
         {([
           { id: 'producao', label: 'Produção', icon: BarChart3 },
           { id: 'unidades', label: 'Unidades', icon: Building2 },
+          { id: 'cobertura', label: 'Cobertura', icon: MapPin },
           { id: 'acessos', label: 'Acessos', icon: Users },
         ] as const).map((t) => (
           <button key={t.id} onClick={() => setAba(t.id)} className={`${tabBase} ${aba === t.id ? tabOn : tabOff}`}>
@@ -80,6 +81,7 @@ export default function Admin() {
 
       {aba === 'producao' && <Producao />}
       {aba === 'unidades' && <Unidades />}
+      {aba === 'cobertura' && <Cobertura />}
       {aba === 'acessos' && <Acessos />}
     </div>
   )
@@ -551,6 +553,199 @@ function Acessos() {
       <p className="text-xs text-ink-4">
         <b>Desativar</b> bloqueia o login sem apagar o histórico. <b>Excluir</b> (lixeira) apaga o acesso de vez — o histórico de ligações/agendamentos fica preservado, porém sem dono.
       </p>
+    </div>
+  )
+}
+
+interface UnidadeJanela {
+  id: string
+  nome: string
+  janela_dias: number | null
+}
+interface CidadeCobertura {
+  id: string
+  cidade: string
+}
+
+const JANELAS: { label: string; dias: number | null }[] = [
+  { label: '30 dias', dias: 30 },
+  { label: '60 dias', dias: 60 },
+  { label: 'Base toda', dias: null },
+]
+
+function Cobertura() {
+  const { unidadeAtiva } = useAuth()
+  const [unidades, setUnidades] = useState<UnidadeJanela[]>([])
+  const [sel, setSel] = useState<string>(unidadeAtiva ?? '')
+  const [cidades, setCidades] = useState<CidadeCobertura[]>([])
+  const [nova, setNova] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  const carregarUnidades = useCallback(async () => {
+    const { data } = await supabase.from('unidades').select('id, nome, janela_dias').order('nome')
+    const list = (data as UnidadeJanela[]) ?? []
+    setUnidades(list)
+    setSel((s) => s || unidadeAtiva || list[0]?.id || '')
+  }, [unidadeAtiva])
+
+  const carregarCidades = useCallback(async (unidadeId: string) => {
+    if (!unidadeId) {
+      setCidades([])
+      return
+    }
+    const { data } = await supabase
+      .from('unidade_cidades')
+      .select('id, cidade')
+      .eq('unidade_id', unidadeId)
+      .order('cidade')
+    setCidades((data as CidadeCobertura[]) ?? [])
+  }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      setLoading(true)
+      await carregarUnidades()
+      setLoading(false)
+    })()
+  }, [carregarUnidades])
+
+  // Acompanha a unidade em foco no menu ("Visualizando").
+  useEffect(() => {
+    if (unidadeAtiva) setSel(unidadeAtiva)
+  }, [unidadeAtiva])
+
+  useEffect(() => {
+    carregarCidades(sel)
+  }, [sel, carregarCidades])
+
+  const unidadeSel = unidades.find((u) => u.id === sel) ?? null
+
+  async function setJanela(dias: number | null) {
+    if (!sel) return
+    await supabase.from('unidades').update({ janela_dias: dias }).eq('id', sel)
+    setUnidades((prev) => prev.map((u) => (u.id === sel ? { ...u, janela_dias: dias } : u)))
+  }
+
+  async function addCidade() {
+    setErro(null)
+    const cidade = nova.trim()
+    if (!cidade || !sel) return
+    setSalvando(true)
+    const { error } = await supabase.from('unidade_cidades').insert({ unidade_id: sel, cidade })
+    setSalvando(false)
+    if (error) {
+      setErro(
+        error.message.includes('duplicate') || error.message.includes('unidade_cidades_cidade')
+          ? `A cidade "${cidade}" já está vinculada a uma unidade.`
+          : error.message
+      )
+      return
+    }
+    setNova('')
+    carregarCidades(sel)
+  }
+
+  async function removeCidade(id: string) {
+    await supabase.from('unidade_cidades').delete().eq('id', id)
+    setCidades((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  if (loading) return <p className="text-sm text-ink-4">Carregando…</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-4 space-y-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">Unidade</label>
+          <select
+            value={sel}
+            onChange={(e) => setSel(e.target.value)}
+            className="w-full sm:w-72 px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card"
+          >
+            {unidades.map((u) => (
+              <option key={u.id} value={u.id}>{u.nome}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1.5">
+            Janela — o que a unidade recebe
+          </label>
+          <div className="flex gap-1.5">
+            {JANELAS.map((j) => {
+              const on = (unidadeSel?.janela_dias ?? null) === j.dias
+              return (
+                <button
+                  key={j.label}
+                  onClick={() => setJanela(j.dias)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                    on ? 'bg-brand text-[#04120a] border-brand' : 'bg-card text-ink-6 border-line hover:bg-white/5'
+                  }`}
+                >
+                  {j.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-ink-4 mt-2">
+            30 ou 60 dias = a equipe só vê os veículos que vencem nesse prazo. “Base toda” = todos os leads com
+            tacógrafo da unidade. Unidades novas já nascem em 30 dias.
+          </p>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">Adicionar cidade</label>
+        <div className="flex gap-2">
+          <input
+            value={nova}
+            onChange={(e) => setNova(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addCidade()}
+            placeholder="Ex.: Santo André"
+            className="flex-1 px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none"
+          />
+          <button
+            onClick={addCidade}
+            disabled={salvando}
+            className="flex items-center gap-1.5 bg-brand text-[#04120a] text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-d transition-colors disabled:opacity-60"
+          >
+            <Plus size={16} /> Adicionar
+          </button>
+        </div>
+        {erro && <p className="text-sm text-danger mt-2">{erro}</p>}
+        <p className="text-xs text-ink-4 mt-2">
+          Os leads dessas cidades pertencem a esta unidade. Cada cidade só pode estar em uma unidade.
+        </p>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="px-5 py-3 border-b border-line text-xs text-ink-4">
+          {cidades.length} {cidades.length === 1 ? 'cidade' : 'cidades'} em {unidadeSel?.nome ?? '—'}
+        </div>
+        {cidades.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-ink-4">Nenhuma cidade vinculada ainda.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {cidades.map((c) => (
+              <li key={c.id} className="flex items-center justify-between px-5 py-3">
+                <span className="flex items-center gap-2 text-sm text-ink">
+                  <MapPin size={15} className="text-brand" /> {c.cidade}
+                </span>
+                <button
+                  onClick={() => removeCidade(c.id)}
+                  className="text-ink-4 hover:text-rose-400"
+                  title="Remover cidade"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
