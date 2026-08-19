@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MapPin, Truck, CalendarPlus, FileText, History, Pencil, Check, X,
-  MessageCircle, AlertTriangle, Ban, Trash2,
+  MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -18,6 +18,7 @@ import {
 import Badge from '../components/Badge'
 import RegistrarLigacaoForm from '../components/RegistrarLigacaoForm'
 import AgendarAfericaoModal from '../components/AgendarAfericaoModal'
+import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
 
 const VALIDADE_ANOS = 2
 
@@ -120,6 +121,7 @@ export default function LeadDetail() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [loading, setLoading] = useState(true)
   const [showAgendar, setShowAgendar] = useState(false)
+  const [showAferido, setShowAferido] = useState(false)
 
   // edição inline
   const [editTelefone, setEditTelefone] = useState(false)
@@ -466,6 +468,15 @@ export default function LeadDetail() {
               >
                 <CalendarPlus size={16} /> Agendar aferição
               </button>
+              {/* Fecha o ciclo: grava a data do serviço em `data_ultima_afericao`,
+                  o lead sai da fila e volta sozinho daqui a 2 anos. */}
+              <button
+                onClick={() => setShowAferido(true)}
+                className="flex items-center gap-1.5 border border-lucro/40 bg-lucro/10 text-lucro text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-lucro/20 transition-colors"
+                title="Registrar que a aferição foi feita"
+              >
+                <CheckCircle2 size={16} /> Aferido
+              </button>
             </div>
           </div>
         </div>
@@ -598,6 +609,19 @@ export default function LeadDetail() {
           onClose={() => setShowAgendar(false)}
           onCreated={() => {
             setShowAgendar(false)
+            carregar()
+          }}
+        />
+      )}
+
+      {showAferido && (
+        <RegistrarAfericaoModal
+          caminhoneiroId={lead.id}
+          unidadeId={lead.unidade_id}
+          operadorId={membro?.user_id}
+          onClose={() => setShowAferido(false)}
+          onSaved={() => {
+            setShowAferido(false)
             carregar()
           }}
         />

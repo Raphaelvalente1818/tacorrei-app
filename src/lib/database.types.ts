@@ -21,8 +21,10 @@ export type ResultadoLigacao =
   | 'agendou'
   | 'reagendar'
   | 'whatsapp_enviado'
+  | 'aferido'
 
-export type CanalContato = 'ligacao_ativa' | 'ligacao_passiva' | 'whatsapp'
+// 'presencial' = o cliente veio e o serviço foi feito (botão "Aferido" na ficha).
+export type CanalContato = 'ligacao_ativa' | 'ligacao_passiva' | 'whatsapp' | 'presencial'
 
 export type StatusAgendamento = 'agendado' | 'confirmado' | 'realizado' | 'cancelado' | 'nao_compareceu'
 

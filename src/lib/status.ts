@@ -31,12 +31,14 @@ export const RESULTADO_LIGACAO_LABEL: Record<ResultadoLigacao, string> = {
   agendou: 'Agendou aferição',
   reagendar: 'Ligar novamente',
   whatsapp_enviado: 'WhatsApp enviado',
+  aferido: 'Aferição realizada',
 }
 
 export const CANAL_CONTATO_LABEL: Record<CanalContato, string> = {
   ligacao_ativa: 'Ligação feita',
   ligacao_passiva: 'Ligação recebida',
   whatsapp: 'WhatsApp',
+  presencial: 'Aferição',
 }
 
 export const STATUS_AGENDAMENTO_LABEL: Record<StatusAgendamento, string> = {
