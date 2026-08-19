@@ -20,7 +20,31 @@ import RegistrarLigacaoForm from '../components/RegistrarLigacaoForm'
 import AgendarAfericaoModal from '../components/AgendarAfericaoModal'
 
 const VALIDADE_ANOS = 2
-const ENDERECO_LACRE = 'Av. dos Estados, 7050, Santo André'
+
+// Marca e endereço que aparecem nas mensagens de WhatsApp, por unidade.
+// A chave é o `unidades.id` do Supabase. Ao abrir uma unidade nova, basta
+// adicionar a linha dela aqui; quem não estiver no mapa cai no padrão abaixo.
+const UNIDADE_SANTO_ANDRE = '146237d6-5983-4986-b4bd-51f9e1d690c3'
+const UNIDADE_SAO_BERNARDO = '265f0c74-123e-4886-9683-b70793c30b61'
+
+type MarcaUnidade = { marca: string; endereco: string }
+
+const MARCA_PADRAO: MarcaUnidade = {
+  marca: 'Lacre Tacógrafos',
+  endereco: 'Av. dos Estados, 7050, Santo André',
+}
+
+const MARCA_POR_UNIDADE: Record<string, MarcaUnidade> = {
+  [UNIDADE_SANTO_ANDRE]: MARCA_PADRAO,
+  [UNIDADE_SAO_BERNARDO]: {
+    marca: 'Tacorrei Tacógrafos',
+    endereco: 'Rua dos Feltrins, 1300 bairro Demarchi - São Bernardo',
+  },
+}
+
+function marcaDoLead(lead: Caminhoneiro): MarcaUnidade {
+  return MARCA_POR_UNIDADE[lead.unidade_id] ?? MARCA_PADRAO
+}
 
 function formatDateBR(iso: string | null): string {
   if (!iso) return '—'
@@ -56,6 +80,7 @@ function numeroWhatsapp(tel: string | null): string | null {
 // Escolhe a mensagem conforme a situação: vencido, a vencer ou sem data de aferição.
 function montarMensagem(lead: Caminhoneiro, info: { venc: Date; vencido: boolean } | null): string {
   const placa = lead.placa_veiculo
+  const { marca, endereco } = marcaDoLead(lead)
 
   if (info && info.vencido) {
     const veiculo = placa ? `Veículo com a placa ${placa}` : 'Seu veículo'
@@ -63,9 +88,9 @@ function montarMensagem(lead: Caminhoneiro, info: { venc: Date; vencido: boolean
 Bom dia!
 ${veiculo} está com o certificado do Tacógrafo vencido desde ${fmtDia(info.venc)}.
 Atualize e evite multas.
-Lacre Tacógrafos
+${marca}
 Ensaio Inmetro
-End: ${ENDERECO_LACRE}
+End: ${endereco}
 Temos condições especiais para você.`
   }
 
@@ -74,17 +99,17 @@ Temos condições especiais para você.`
     return `✅ Lembrete importante!
 ${inicio} certificado do Tacógrafo vence em ${fmtDia(info.venc)}.
 Agende com antecedência e evite a correria de última hora e o risco de multa.
-Lacre Tacógrafos — Ensaio Inmetro
-End: ${ENDERECO_LACRE}
+${marca} — Ensaio Inmetro
+End: ${endereco}
 Temos condições especiais para você.`
   }
 
   // Sem data de aferição registrada — não sabemos o vencimento
   const inicio = placa ? `Para o veículo de placa ${placa}: v` : 'V'
-  return `Olá! Aqui é da Lacre Tacógrafos (Ensaio Inmetro).
+  return `Olá! Aqui é da ${marca} (Ensaio Inmetro).
 ${inicio}ocê sabe a data da última aferição do tacógrafo? O certificado vale 2 anos, e circular vencido gera multa.
 Se quiser, a gente confere e já agenda pra você. Temos condições especiais.
-End: ${ENDERECO_LACRE}`
+End: ${endereco}`
 }
 
 export default function LeadDetail() {

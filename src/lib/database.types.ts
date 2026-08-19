@@ -45,6 +45,7 @@ export interface Caminhoneiro {
   data_ultimo_whatsapp: string | null
   tem_tacografo: boolean
   whatsapp_invalido: boolean
+  unidade_id: string
   created_at: string
   updated_at: string
 }
