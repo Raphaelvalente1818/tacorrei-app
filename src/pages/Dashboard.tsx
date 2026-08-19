@@ -59,6 +59,14 @@ export default function Dashboard() {
   const [porStatus, setPorStatus] = useState<Record<string, number>>({})
 
   useEffect(() => {
+    // Este effect roda mais de uma vez: no primeiro render ainda não sabemos quem
+    // está logado, então `filtroUnidade` vem null (= todas as unidades); quando o
+    // perfil carrega e é admin, ele vira a unidade escolhida e o effect roda de novo.
+    // As duas buscas ficam no ar ao mesmo tempo — e a primeira (sem filtro, que varre
+    // a base inteira) costuma demorar MAIS que a segunda. Sem esta guarda, a resposta
+    // atrasada chegava por último e sobrescrevia os números certos: era por isso que o
+    // admin via o total geral (3.404) mesmo com uma unidade selecionada.
+    let cancelado = false
     ;(async () => {
       setLoading(true)
       const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
@@ -66,12 +74,16 @@ export default function Dashboard() {
         contar(filtroUnidade),
         ...statuses.map((s) => contar(filtroUnidade, s)),
       ])
+      if (cancelado) return
       const map: Record<string, number> = {}
       statuses.forEach((s, i) => (map[s] = counts[i]))
       setTotal(tot)
       setPorStatus(map)
       setLoading(false)
     })()
+    return () => {
+      cancelado = true
+    }
   }, [filtroUnidade])
 
   const contatados = total - (porStatus['novo'] ?? 0)

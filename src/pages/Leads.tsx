@@ -68,7 +68,9 @@ export default function Leads() {
     setPage(0)
   }, [filtro, buscaDebounced, filtroUnidade])
 
-  const carregar = useCallback(async () => {
+  // `aindaVale` permite descartar uma resposta que chegou atrasada, depois que o
+  // filtro/unidade já mudou (senão a lista antiga sobrescreve a nova — ver Dashboard).
+  const carregar = useCallback(async (aindaVale: () => boolean = () => true) => {
     setLoading(true)
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
@@ -99,13 +101,18 @@ export default function Leads() {
       .range(from, to)
 
     const { data, count } = await query
+    if (!aindaVale()) return
     setLeads((data as Caminhoneiro[]) ?? [])
     setTotal(count ?? 0)
     setLoading(false)
   }, [page, filtro, buscaDebounced, filtroUnidade])
 
   useEffect(() => {
-    carregar()
+    let cancelado = false
+    carregar(() => !cancelado)
+    return () => {
+      cancelado = true
+    }
   }, [carregar])
 
   const inicio = total === 0 ? 0 : page * PAGE_SIZE + 1
