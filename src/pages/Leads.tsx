@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
@@ -66,6 +66,11 @@ function vencimento(iso: string | null): { texto: string; classe: string } | nul
   return { texto, classe }
 }
 
+// Guarda qual lead a operadora abriu por último. Ao voltar da ficha, a lista
+// rola até ele e o destaca — assim ela retoma a sequência de onde parou em vez
+// de cair no topo da página 1. Fica em sessionStorage (morre ao fechar a aba).
+const LS_ULTIMO_LEAD = 'lacre.ultimoLead'
+
 export default function Leads() {
   const { membro } = useAuth()
   const filtroUnidade = useFiltroUnidade()
@@ -74,10 +79,13 @@ export default function Leads() {
   const filtros = FILTROS.filter((f) => f.value !== 'sem_tacografo' || isAdmin)
   const [leads, setLeads] = useState<Caminhoneiro[]>([])
   const [loading, setLoading] = useState(true)
-  const [filtro, setFiltro] = useState<FiltroLead>('todos')
-  const [busca, setBusca] = useState('')
-  const [buscaDebounced, setBuscaDebounced] = useState('')
-  const [page, setPage] = useState(0)
+  // Filtro, busca e página moram na URL: voltar da ficha (ou dar refresh, ou usar
+  // o botão do navegador) devolve a lista exatamente como estava.
+  const [params, setParams] = useSearchParams()
+  const [filtro, setFiltro] = useState<FiltroLead>((params.get('f') as FiltroLead) || 'todos')
+  const [busca, setBusca] = useState(params.get('q') ?? '')
+  const [buscaDebounced, setBuscaDebounced] = useState(params.get('q') ?? '')
+  const [page, setPage] = useState(Math.max(0, Number(params.get('p') ?? 1) - 1))
   const [total, setTotal] = useState(0)
   const [showNovo, setShowNovo] = useState(false)
   const [irPara, setIrPara] = useState('')
@@ -89,9 +97,24 @@ export default function Leads() {
   }, [busca])
 
   // ao mudar filtro/busca/unidade, volta pra primeira página
+  const primeiraCarga = useRef(true)
   useEffect(() => {
+    if (primeiraCarga.current) {
+      // não zera a página na montagem, senão perderíamos a página vinda da URL
+      primeiraCarga.current = false
+      return
+    }
     setPage(0)
   }, [filtro, buscaDebounced, filtroUnidade])
+
+  // espelha o estado da lista na URL
+  useEffect(() => {
+    const novo = new URLSearchParams()
+    if (page > 0) novo.set('p', String(page + 1))
+    if (filtro !== 'todos') novo.set('f', filtro)
+    if (buscaDebounced) novo.set('q', buscaDebounced)
+    setParams(novo, { replace: true })
+  }, [page, filtro, buscaDebounced, setParams])
 
   // `aindaVale` permite descartar uma resposta que chegou atrasada, depois que o
   // filtro/unidade já mudou (senão a lista antiga sobrescreve a nova — ver Dashboard).
@@ -139,6 +162,31 @@ export default function Leads() {
       cancelado = true
     }
   }, [carregar])
+
+  // Depois que a lista pinta, rola até o lead aberto por último e o destaca.
+  const [destacado, setDestacado] = useState<string | null>(null)
+  useEffect(() => {
+    if (loading || leads.length === 0) return
+    let id: string | null = null
+    try {
+      id = sessionStorage.getItem(LS_ULTIMO_LEAD)
+    } catch {
+      return
+    }
+    if (!id || !leads.some((l) => l.id === id)) return
+    try {
+      sessionStorage.removeItem(LS_ULTIMO_LEAD)
+    } catch {
+      // ignora
+    }
+    setDestacado(id)
+    // espera o navegador pintar a linha antes de rolar
+    requestAnimationFrame(() => {
+      document.getElementById(`lead-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+    const t = setTimeout(() => setDestacado(null), 2500)
+    return () => clearTimeout(t)
+  }, [loading, leads])
 
   const inicio = total === 0 ? 0 : page * PAGE_SIZE + 1
   const fim = Math.min((page + 1) * PAGE_SIZE, total)
@@ -219,9 +267,25 @@ export default function Leads() {
               {leads.map((lead) => {
                 const venc = vencimento(lead.data_ultima_afericao)
                 return (
-                  <tr key={lead.id} className="border-b border-line last:border-0 hover:bg-white/5">
+                  <tr
+                  key={lead.id}
+                  id={`lead-${lead.id}`}
+                  className={`border-b border-line last:border-0 transition-colors ${
+                    destacado === lead.id ? 'bg-brand/15' : 'hover:bg-white/5'
+                  }`}
+                >
                     <td className="px-5 py-3">
-                      <Link to={`/leads/${lead.id}`} className="font-semibold text-brand-d hover:underline">
+                      <Link
+                        to={`/leads/${lead.id}`}
+                        onClick={() => {
+                          try {
+                            sessionStorage.setItem(LS_ULTIMO_LEAD, lead.id)
+                          } catch {
+                            // ignora ambientes sem sessionStorage
+                          }
+                        }}
+                        className="font-semibold text-brand-d hover:underline"
+                      >
                         {lead.nome}
                       </Link>
                     </td>

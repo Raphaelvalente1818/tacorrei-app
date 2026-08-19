@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MapPin, Truck, CalendarPlus, FileText, History, Pencil, Check, X,
   MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2,
@@ -115,6 +115,7 @@ End: ${endereco}`
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { membro } = useAuth()
   const [lead, setLead] = useState<Caminhoneiro | null>(null)
   const [ligacoes, setLigacoes] = useState<Ligacao[]>([])
@@ -276,7 +277,18 @@ export default function LeadDetail() {
 
   return (
     <div>
-      <Link to="/leads" className="inline-flex items-center gap-1.5 text-sm text-ink-6 hover:text-ink mb-4">
+      {/* -1 volta para a lista COM os filtros/página que estavam na URL. Se a pessoa
+          abriu a ficha direto pelo link (sem passar pela lista), cai em /leads. */}
+      <Link
+        to="/leads"
+        onClick={(e) => {
+          if (window.history.length > 1) {
+            e.preventDefault()
+            navigate(-1)
+          }
+        }}
+        className="inline-flex items-center gap-1.5 text-sm text-ink-6 hover:text-ink mb-4"
+      >
         <ArrowLeft size={15} /> Voltar para leads
       </Link>
 
