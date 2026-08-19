@@ -23,6 +23,27 @@ const FILTROS: Array<{ label: string; value: FiltroLead }> = [
 ]
 
 const PAGE_SIZE = 50
+
+// Quais números de página mostrar. Com 19 páginas não cabe tudo, então:
+// sempre a primeira e a última, a atual com uma vizinha de cada lado, e '…' nos
+// buracos. O resultado tem largura fixa — a barra não "pula" ao trocar de página.
+function paginasVisiveis(atual: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+
+  const paginas = new Set<number>([1, total, atual, atual - 1, atual + 1])
+  // perto das pontas, estica para o outro lado para manter sempre 7 posições
+  if (atual <= 3) [2, 3, 4].forEach((p) => paginas.add(p))
+  if (atual >= total - 2) [total - 3, total - 2, total - 1].forEach((p) => paginas.add(p))
+
+  const ordenadas = [...paginas].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
+
+  const saida: (number | '…')[] = []
+  ordenadas.forEach((p, i) => {
+    if (i > 0 && p - ordenadas[i - 1] > 1) saida.push('…')
+    saida.push(p)
+  })
+  return saida
+}
 const VALIDADE_ANOS = 2
 
 // Vencimento = última aferição + 2 anos. Retorna { texto, classe } ou null (sem data).
@@ -119,6 +140,8 @@ export default function Leads() {
   const fim = Math.min((page + 1) * PAGE_SIZE, total)
   const temAnterior = page > 0
   const temProxima = fim < total
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const paginas = paginasVisiveis(page + 1, totalPaginas)
 
   return (
     <div>
@@ -216,18 +239,44 @@ export default function Leads() {
             <span>
               Mostrando {inicio}–{fim} de {total} leads
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={!temAnterior}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-white/5"
+                aria-label="Página anterior"
               >
                 <ChevronLeft size={15} /> Anterior
               </button>
+
+              {/* Números para pular direto. Com 19 páginas, "Próxima" 12 vezes
+                  para chegar no meio é o que as operadoras reclamaram. */}
+              {paginas.map((p, i) =>
+                p === '…' ? (
+                  <span key={`gap-${i}`} className="px-1.5 text-ink-4 select-none">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p - 1)}
+                    aria-current={p === page + 1 ? 'page' : undefined}
+                    className={`min-w-8 px-2.5 py-1.5 rounded-lg border text-sm font-bold tabular-nums transition-colors ${
+                      p === page + 1
+                        ? 'bg-brand text-[#04120a] border-brand'
+                        : 'border-line text-ink-6 hover:bg-white/5'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={!temProxima}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line disabled:opacity-40 hover:bg-white/5"
+                aria-label="Próxima página"
               >
                 Próxima <ChevronRight size={15} />
               </button>

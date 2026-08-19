@@ -36,12 +36,18 @@ interface Membro {
   user_id: string
   nome: string
   email: string | null
-  papel: 'admin' | 'operador'
+  papel: 'admin' | 'admin_unidade' | 'operador'
   ativo: boolean
   unidade_id: string | null
 }
 
 type Aba = 'producao' | 'unidades' | 'cobertura' | 'acessos'
+
+const PAPEL_LABEL: Record<Membro['papel'], string> = {
+  admin: 'Admin',
+  admin_unidade: 'Admin da unidade',
+  operador: 'Operador',
+}
 
 const tabBase = 'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors'
 const tabOn = 'bg-brand text-[#04120a] border-brand'
@@ -51,7 +57,10 @@ export default function Admin() {
   const { membro } = useAuth()
   const [aba, setAba] = useState<Aba>('producao')
 
-  if (membro?.papel !== 'admin') {
+  const isAdmin = membro?.papel === 'admin'
+  const isAdminUnidade = membro?.papel === 'admin_unidade'
+
+  if (!isAdmin && !isAdminUnidade) {
     return (
       <div className="card p-6">
         <p className="text-sm text-ink-6">Acesso restrito aos administradores.</p>
@@ -59,20 +68,29 @@ export default function Admin() {
     )
   }
 
+  // O admin de unidade não cria unidade nem configura território — isso é do
+  // Aferi+, não da unidade. Ele fica com Produção (a equipe dele), Unidades
+  // (comparação por totais) e Acessos (a equipe dele).
+  const abas: { id: Aba; label: string; icon: typeof BarChart3 }[] = [
+    { id: 'producao', label: 'Produção', icon: BarChart3 },
+    { id: 'unidades', label: 'Unidades', icon: Building2 },
+    ...(isAdmin ? [{ id: 'cobertura' as Aba, label: 'Cobertura', icon: MapPin }] : []),
+    { id: 'acessos', label: 'Acessos', icon: Users },
+  ]
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-extrabold text-ink">Painel Admin</h1>
-        <p className="text-sm text-ink-4">Produção das unidades, gestão de unidades e acessos</p>
+        <p className="text-sm text-ink-4">
+          {isAdmin
+            ? 'Produção das unidades, gestão de unidades e acessos'
+            : 'Produção da sua unidade, comparação e acessos da sua equipe'}
+        </p>
       </div>
 
       <div className="flex gap-2 mb-6">
-        {([
-          { id: 'producao', label: 'Produção', icon: BarChart3 },
-          { id: 'unidades', label: 'Unidades', icon: Building2 },
-          { id: 'cobertura', label: 'Cobertura', icon: MapPin },
-          { id: 'acessos', label: 'Acessos', icon: Users },
-        ] as const).map((t) => (
+        {abas.map((t) => (
           <button key={t.id} onClick={() => setAba(t.id)} className={`${tabBase} ${aba === t.id ? tabOn : tabOff}`}>
             <t.icon size={16} /> {t.label}
           </button>
@@ -80,9 +98,9 @@ export default function Admin() {
       </div>
 
       {aba === 'producao' && <Producao />}
-      {aba === 'unidades' && <Unidades />}
-      {aba === 'cobertura' && <Cobertura />}
-      {aba === 'acessos' && <Acessos />}
+      {aba === 'unidades' && <Unidades podeEditar={isAdmin} />}
+      {aba === 'cobertura' && isAdmin && <Cobertura />}
+      {aba === 'acessos' && <Acessos podeTudo={isAdmin} />}
     </div>
   )
 }
@@ -240,7 +258,7 @@ function pctFila(abordados: number, fila: number): string | null {
   return `${Math.round(p)}%`
 }
 
-function Unidades() {
+function Unidades({ podeEditar }: { podeEditar: boolean }) {
   const [unidades, setUnidades] = useState<UnidadePainel[]>([])
   const [loading, setLoading] = useState(true)
   const [nova, setNova] = useState('')
@@ -285,6 +303,8 @@ function Unidades() {
 
   return (
     <div className="space-y-4">
+      {/* Criar unidade é do Aferi+, não do admin de unidade. */}
+      {podeEditar && (
       <div className="card p-4">
         <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">Nova unidade</label>
         <div className="flex gap-2">
@@ -305,6 +325,7 @@ function Unidades() {
         </div>
         {erro && <p className="text-sm text-danger mt-2">{erro}</p>}
       </div>
+      )}
 
       <div className="card overflow-hidden">
         {loading ? (
@@ -384,7 +405,7 @@ function Unidades() {
                   </td>
 
                   <td className="px-5 py-3 text-right">
-                    {editId !== u.id && (
+                    {podeEditar && editId !== u.id && (
                       <button
                         onClick={() => {
                           setEditId(u.id)
@@ -429,8 +450,10 @@ function Unidades() {
   )
 }
 
-function Acessos() {
-  const { unidades: unidadesCtx, unidadeAtiva } = useAuth()
+function Acessos({ podeTudo }: { podeTudo: boolean }) {
+  const { membro, unidades: unidadesCtx, unidadeAtiva } = useAuth()
+  // Admin de unidade não tem seletor "Visualizando": a unidade dele é a dele.
+  const unidadeFoco = podeTudo ? unidadeAtiva : membro?.unidade_id ?? null
   const [membros, setMembros] = useState<Membro[]>([])
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [loading, setLoading] = useState(true)
@@ -439,8 +462,8 @@ function Acessos() {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
-  const [papel, setPapel] = useState<'admin' | 'operador'>('operador')
-  const [unidadeId, setUnidadeId] = useState(unidadeAtiva ?? '')
+  const [papel, setPapel] = useState<'admin' | 'admin_unidade' | 'operador'>('operador')
+  const [unidadeId, setUnidadeId] = useState(unidadeFoco ?? '')
   const [criando, setCriando] = useState(false)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
 
@@ -453,9 +476,9 @@ function Acessos() {
     setMembros((m.data as Membro[]) ?? [])
     const uni = (u.data as Unidade[]) ?? []
     setUnidades(uni)
-    if (!unidadeId && uni.length) setUnidadeId(unidadeAtiva ?? uni[0].id)
+    if (!unidadeId && uni.length) setUnidadeId(unidadeFoco ?? uni[0].id)
     setLoading(false)
-  }, [unidadeId, unidadeAtiva])
+  }, [unidadeId, unidadeFoco])
 
   useEffect(() => {
     carregar()
@@ -463,8 +486,8 @@ function Acessos() {
 
   // Ao trocar a unidade "em foco" no menu, o formulário de novo acesso acompanha.
   useEffect(() => {
-    if (unidadeAtiva) setUnidadeId(unidadeAtiva)
-  }, [unidadeAtiva])
+    if (unidadeFoco) setUnidadeId(unidadeFoco)
+  }, [unidadeFoco])
 
   async function atualizar(user_id: string, campos: Partial<Membro>) {
     await supabase.from('equipe').update(campos).eq('user_id', user_id)
@@ -517,15 +540,16 @@ function Acessos() {
     (unidadesCtx.find((u) => u.id === id)?.nome ?? unidades.find((u) => u.id === id)?.nome) ?? '—'
 
   // Filtra pela unidade em foco no menu ("Visualizando"). Sem foco = todas.
-  const visiveis = unidadeAtiva ? membros.filter((m) => m.unidade_id === unidadeAtiva) : membros
+  const visiveis = unidadeFoco ? membros.filter((m) => m.unidade_id === unidadeFoco) : membros
 
   return (
     <div className="space-y-4">
       <div className="card p-4">
         <div className="text-sm font-extrabold text-ink mb-1">Novo acesso</div>
-        {unidadeAtiva && (
+        {unidadeFoco && (
           <p className="text-xs text-lucro mb-2">
-            Entra em <b>{nomeUnidade(unidadeAtiva)}</b> (unidade em foco no menu).
+            Entra em <b>{nomeUnidade(unidadeFoco)}</b>
+            {podeTudo ? ' (unidade em foco no menu).' : ' — sua unidade.'}
           </p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
@@ -535,19 +559,28 @@ function Acessos() {
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
           <input value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha (mín. 6)" type="text"
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
-          <div className="grid grid-cols-2 gap-3">
-            <select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}
-              className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card">
-              {unidades.map((u) => (
-                <option key={u.id} value={u.id}>{u.nome}</option>
-              ))}
-            </select>
-            <select value={papel} onChange={(e) => setPapel(e.target.value as 'admin' | 'operador')}
-              className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card">
-              <option value="operador">Operador</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
+          {podeTudo ? (
+            <div className="grid grid-cols-2 gap-3">
+              <select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}
+                className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card">
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+              <select value={papel} onChange={(e) => setPapel(e.target.value as Membro['papel'])}
+                className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card">
+                <option value="operador">Operador</option>
+                <option value="admin_unidade">Admin da unidade</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          ) : (
+            /* Admin de unidade só cria operador, e só na unidade dele. O servidor
+               força isso de novo — aqui é só para não oferecer o que será negado. */
+            <div className="px-3 py-2 border border-line rounded-xl text-sm text-ink-4 flex items-center">
+              Operador em {nomeUnidade(unidadeFoco)}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-3">
           <button onClick={criarAcesso} disabled={criando}
@@ -562,7 +595,7 @@ function Acessos() {
       <div className="card overflow-hidden">
         <div className="px-5 py-3 border-b border-line text-xs text-ink-4">
           {visiveis.length} {visiveis.length === 1 ? 'pessoa' : 'pessoas'}
-          {unidadeAtiva ? ` em ${nomeUnidade(unidadeAtiva)}` : ' (equipe inteira)'}
+          {unidadeFoco ? ` em ${nomeUnidade(unidadeFoco)}` : ' (equipe inteira)'}
         </div>
         {loading ? (
           <p className="p-6 text-sm text-ink-4">Carregando…</p>
@@ -584,26 +617,36 @@ function Acessos() {
                   <td className="px-5 py-3 font-semibold text-ink">{m.nome}</td>
                   <td className="px-5 py-3 text-ink-6">{m.email ?? '—'}</td>
                   <td className="px-5 py-3">
-                    <select
-                      value={m.unidade_id ?? ''}
-                      onChange={(e) => atualizar(m.user_id, { unidade_id: e.target.value || null })}
-                      className="px-2 py-1 border border-line rounded-lg text-sm bg-card outline-none"
-                    >
-                      <option value="">—</option>
-                      {unidades.map((u) => (
-                        <option key={u.id} value={u.id}>{u.nome}</option>
-                      ))}
-                    </select>
+                    {podeTudo ? (
+                      <select
+                        value={m.unidade_id ?? ''}
+                        onChange={(e) => atualizar(m.user_id, { unidade_id: e.target.value || null })}
+                        className="px-2 py-1 border border-line rounded-lg text-sm bg-card outline-none"
+                      >
+                        <option value="">—</option>
+                        {unidades.map((u) => (
+                          <option key={u.id} value={u.id}>{u.nome}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-ink-6">{nomeUnidade(m.unidade_id)}</span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
-                    <select
-                      value={m.papel}
-                      onChange={(e) => atualizar(m.user_id, { papel: e.target.value as 'admin' | 'operador' })}
-                      className="px-2 py-1 border border-line rounded-lg text-sm bg-card outline-none"
-                    >
-                      <option value="operador">Operador</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    {/* Mover de unidade e promover são do admin pleno. */}
+                    {podeTudo ? (
+                      <select
+                        value={m.papel}
+                        onChange={(e) => atualizar(m.user_id, { papel: e.target.value as Membro['papel'] })}
+                        className="px-2 py-1 border border-line rounded-lg text-sm bg-card outline-none"
+                      >
+                        <option value="operador">Operador</option>
+                        <option value="admin_unidade">Admin da unidade</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    ) : (
+                      <span className="text-ink-6">{PAPEL_LABEL[m.papel]}</span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <button

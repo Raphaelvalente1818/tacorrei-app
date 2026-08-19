@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Admin carrega a lista de unidades para alimentar o seletor.
   useEffect(() => {
+    // Só o admin pleno escolhe unidade — o admin_unidade tem a dele fixa.
     if (membro?.papel !== 'admin') {
       setUnidades([])
       return
@@ -121,5 +122,15 @@ export function useAuth() {
 // Para operador, retorna null (o RLS já limita à unidade dele).
 export function useFiltroUnidade(): string | null {
   const { membro, unidadeAtiva } = useAuth()
-  return membro?.papel === 'admin' ? unidadeAtiva : null
+  if (membro?.papel === 'admin') return unidadeAtiva
+  // Admin de unidade: fixo na unidade dele. A RLS já garante isso no banco;
+  // aqui é só para as telas não pedirem dado que viria vazio.
+  if (membro?.papel === 'admin_unidade') return membro.unidade_id
+  return null
+}
+
+// Quem enxerga o painel Admin: o pleno e o da unidade (com abas reduzidas).
+export function usePodeAdmin(): boolean {
+  const { membro } = useAuth()
+  return membro?.papel === 'admin' || membro?.papel === 'admin_unidade'
 }

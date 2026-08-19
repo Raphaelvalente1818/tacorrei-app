@@ -80,7 +80,10 @@ export interface Agendamento {
 export interface EquipeMembro {
   user_id: string
   nome: string
-  papel: 'admin' | 'operador'
+  // 'admin' = Raphael/Emerson (tudo, todas as unidades)
+  // 'admin_unidade' = dono/gerente de UMA unidade
+  // 'operador' = a fila do dia
+  papel: 'admin' | 'admin_unidade' | 'operador'
   ativo: boolean
   unidade_id: string | null
   email: string | null

@@ -13,9 +13,18 @@ const navBase =
 const navActive = 'bg-gradient-to-br from-brand to-brand-d text-[#04120a] shadow-lg shadow-brand/25'
 const navIdle = 'text-ink-6 hover:bg-white/5'
 
+const PAPEL_LABEL: Record<string, string> = {
+  admin: 'admin',
+  admin_unidade: 'admin da unidade',
+  operador: 'operador',
+}
+
 export default function Layout() {
   const { membro, user, signOut, unidades, unidadeAtiva, setUnidadeAtiva } = useAuth()
   const isAdmin = membro?.papel === 'admin'
+  // O admin de unidade também entra no painel, mas com abas reduzidas
+  // e sem o seletor "Visualizando" — ele só tem uma unidade.
+  const vePainelAdmin = isAdmin || membro?.papel === 'admin_unidade'
 
   return (
     <div className="min-h-screen flex bg-bg">
@@ -78,7 +87,7 @@ export default function Layout() {
             </NavLink>
           ))}
 
-          {isAdmin && (
+          {vePainelAdmin && (
             <NavLink to="/admin" className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}>
               <Shield size={17} strokeWidth={2.2} />
               Admin
@@ -93,7 +102,7 @@ export default function Layout() {
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-ink truncate">{membro?.nome ?? user?.email}</div>
-              <div className="text-[11px] text-ink-4">{membro?.papel ?? 'operador'}</div>
+              <div className="text-[11px] text-ink-4">{PAPEL_LABEL[membro?.papel ?? 'operador']}</div>
             </div>
           </div>
           <NavLink to="/trocar-senha" className={({ isActive }) => `w-full ${navBase} ${isActive ? navActive : navIdle}`}>
