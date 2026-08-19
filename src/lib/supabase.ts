@@ -16,23 +16,9 @@ export const supabase = createClient<Database>(url, key, {
   },
 })
 
-// Busca todos os caminhoneiros paginando em blocos de 1000 (limite do PostgREST).
-// Mantido para eventual exportação em CSV — as telas usam paginação/contagem no servidor.
-export async function fetchAllCaminhoneiros() {
-  const BLOCO = 1000
-  let inicio = 0
-  const todos: unknown[] = []
-  for (;;) {
-    const { data, error } = await supabase
-      .from('caminhoneiros')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(inicio, inicio + BLOCO - 1)
-    if (error) throw error
-    const lote = data ?? []
-    todos.push(...lote)
-    if (lote.length < BLOCO) break
-    inicio += BLOCO
-  }
-  return todos
-}
+// REMOVIDO (19/08/2026 — auditoria de segurança): `fetchAllCaminhoneiros()`.
+// Era um laço que puxava a base inteira de 1.000 em 1.000 registros. Nenhuma tela
+// usava, mas ia no pacote JavaScript entregue ao cliente — ou seja, uma ferramenta
+// de extração em massa publicada junto com o produto. Se algum dia for preciso ler
+// muitos registros, que seja por RPC no servidor, com teto de página e registro de
+// acesso. NÃO reintroduzir leitura em massa no navegador.
