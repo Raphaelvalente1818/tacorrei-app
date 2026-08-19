@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Users, PhoneCall, CalendarClock, CheckCircle2 } from 'lucide-react'
+import { Users, PhoneCall, CalendarClock, CheckCircle2, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useFiltroUnidade } from '../lib/AuthContext'
 import type { StatusLead } from '../lib/database.types'
@@ -12,6 +12,78 @@ const FUNIL_ORDEM: Array<{ status: StatusLead; label: string }> = [
   { status: 'agendado', label: 'Agendados' },
   { status: 'aferido', label: 'Aferidos' },
 ]
+
+// ── Placar entre unidades ────────────────────────────────────────────────────
+// Mensagens de WhatsApp enviadas no mês corrente, por unidade. Vem da RPC
+// `placar_unidades()`, que é SECURITY DEFINER e devolve SÓ os totais agregados —
+// por isso a operadora de uma unidade vê o número da outra sem enxergar lead algum.
+type PlacarItem = { unidade: string; total: number; sua: boolean }
+
+const MEDALHAS = ['🥇', '🥈', '🥉']
+
+function Placar() {
+  const [itens, setItens] = useState<PlacarItem[]>([])
+
+  useEffect(() => {
+    let cancelado = false
+    supabase.rpc('placar_unidades').then(({ data, error }) => {
+      if (cancelado || error) return
+      setItens((data as PlacarItem[]) ?? [])
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [])
+
+  // Enquanto ninguém enviou nada no mês, o placar zerado não motiva — some.
+  if (itens.length < 2 || itens.every((i) => i.total === 0)) return null
+
+  const lider = itens[0].total
+
+  return (
+    <div className="card p-5 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Trophy size={16} className="text-lucro" strokeWidth={2.3} />
+        <span className="text-xs font-bold uppercase tracking-wide text-ink-4">
+          Mensagens enviadas em {mesAtual()}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {itens.map((item, i) => (
+          <div key={item.unidade} className="flex items-center gap-3">
+            <span className="w-6 text-center text-base leading-none">
+              {MEDALHAS[i] ?? <span className="text-ink-4 text-xs font-bold">{i + 1}º</span>}
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <span
+                  className={`text-sm font-bold truncate ${item.sua ? 'text-lucro' : 'text-ink'}`}
+                >
+                  {item.unidade}
+                  {item.sua && <span className="text-[10px] font-extrabold ml-1.5">VOCÊS</span>}
+                </span>
+                <span className="text-lg font-extrabold text-ink tabular-nums">{item.total}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${item.sua ? 'bg-lucro' : 'bg-ink-4/50'}`}
+                  style={{ width: lider > 0 ? `${Math.max((item.total / lider) * 100, 2)}%` : '2%' }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function mesAtual(): string {
+  const m = new Date().toLocaleDateString('pt-BR', { month: 'long' })
+  return m.charAt(0).toUpperCase() + m.slice(1)
+}
 
 function StatTile({
   icon: Icon,
@@ -98,6 +170,8 @@ export default function Dashboard() {
         <h1 className="text-xl font-extrabold text-ink">Dashboard</h1>
         <p className="text-sm text-ink-4">Visão geral do funil de aferição de tacógrafos</p>
       </div>
+
+      <Placar />
 
       {loading ? (
         <p className="text-sm text-ink-4">Carregando…</p>
