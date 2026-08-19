@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase'
 import type { CanalContato, ResultadoLigacao, StatusLead } from '../lib/database.types'
 import { CANAL_CONTATO_LABEL, RESULTADO_LIGACAO_LABEL } from '../lib/status'
 
+// Resultados oferecidos NESTE formulário. Ficam de fora os que têm botão próprio
+// na ficha: 'whatsapp_enviado' (botão Enviar WhatsApp) e 'aferido' (botão Aferido,
+// que também grava a data do serviço — registrar por aqui não faria isso).
 const RESULTADOS: ResultadoLigacao[] = [
   'atendeu',
   'nao_atendeu',
@@ -12,9 +15,11 @@ const RESULTADOS: ResultadoLigacao[] = [
   'reagendar',
 ]
 
-// Tipos de contato manuais (o WhatsApp é registrado automaticamente pelo botão de envio)
+// Tipos de contato manuais (WhatsApp e aferição são registrados pelos botões da ficha)
 const CANAIS: CanalContato[] = ['ligacao_ativa', 'ligacao_passiva']
 
+// Precisa cobrir TODOS os resultados, inclusive os que não aparecem no formulário —
+// é um Record completo, e o build quebra se faltar algum.
 const STATUS_POR_RESULTADO: Record<ResultadoLigacao, StatusLead> = {
   atendeu: 'contatado',
   nao_atendeu: 'sem_resposta',
@@ -23,6 +28,7 @@ const STATUS_POR_RESULTADO: Record<ResultadoLigacao, StatusLead> = {
   agendou: 'agendado',
   reagendar: 'contatado',
   whatsapp_enviado: 'mensagem_enviada',
+  aferido: 'aferido',
 }
 
 export default function RegistrarLigacaoForm({
