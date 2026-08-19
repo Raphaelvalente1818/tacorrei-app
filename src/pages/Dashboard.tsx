@@ -58,19 +58,25 @@ function Placar() {
 
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline justify-between gap-2 mb-1">
-                <span
-                  className={`text-sm font-bold truncate ${item.sua ? 'text-lucro' : 'text-ink'}`}
-                >
+                <span className={`text-sm font-bold truncate ${item.sua ? 'text-lucro' : 'text-ink'}`}>
                   {item.unidade}
-                  {item.sua && <span className="text-[10px] font-extrabold ml-1.5">VOCÊS</span>}
+                  {item.sua && <span className="badge ml-2 align-middle">VOCÊS</span>}
                 </span>
                 <span className="text-lg font-extrabold text-ink tabular-nums">{item.total}</span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${item.sua ? 'bg-lucro' : 'bg-ink-4/50'}`}
-                  style={{ width: lider > 0 ? `${Math.max((item.total / lider) * 100, 2)}%` : '2%' }}
-                />
+              {/* Barra = medidor: trilho num tom um passo acima do cartão (visível mesmo
+                  vazio) e preenchimento sempre no verde da marca. Antes o preenchimento de
+                  quem não era "você" usava um cinza sem croma nenhum — sumia no fundo escuro.
+                  Quem está olhando se identifica pelo nome verde + selo VOCÊS, não pela
+                  cor da barra; assim a barra encoda só o tamanho, que é o que se compara.
+                  Zero não ganha barra nenhuma: o trilho vazio já diz isso, e sem mentir. */}
+              <div className="h-2 rounded-full bg-line overflow-hidden">
+                {item.total > 0 && (
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{ width: `${Math.max((item.total / lider) * 100, 4)}%` }}
+                  />
+                )}
               </div>
             </div>
           </div>
