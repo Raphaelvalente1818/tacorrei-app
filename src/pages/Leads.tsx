@@ -120,38 +120,27 @@ export default function Leads() {
   // filtro/unidade já mudou (senão a lista antiga sobrescreve a nova — ver Dashboard).
   const carregar = useCallback(async (aindaVale: () => boolean = () => true) => {
     setLoading(true)
-    const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-    let query = supabase.from('caminhoneiros').select('*', { count: 'exact' })
+    // A lista NÃO consulta a tabela direto. Vai pela RPC `listar_leads`, que impõe
+    // teto de 100 por página e registra o acesso em `acessos_lead`. Era por aqui
+    // que dava para puxar 1.000 registros de uma vez sem deixar rastro.
+    const { data, error } = await supabase.rpc('listar_leads', {
+      p_pagina: page + 1,
+      p_tamanho: PAGE_SIZE,
+      p_filtro: filtro,
+      p_busca: buscaDebounced.trim() || null,
+      p_unidade: filtroUnidade,
+    })
 
-    // Admin pode focar numa unidade; a funcionária já é limitada pelo RLS.
-    if (filtroUnidade) query = query.eq('unidade_id', filtroUnidade)
-
-    if (filtro === 'sem_tacografo') {
-      // fila separada: veículos sem tacógrafo (fora do público-alvo)
-      query = query.eq('tem_tacografo', false)
-    } else {
-      // demais filtros só mostram o público-alvo (com tacógrafo)
-      query = query.eq('tem_tacografo', true)
-      if (filtro !== 'todos') query = query.eq('status', filtro)
-    }
-
-    const q = buscaDebounced.trim().replace(/[,()%]/g, ' ').trim()
-    if (q) {
-      query = query.or(
-        `nome.ilike.%${q}%,telefone.ilike.%${q}%,cidade.ilike.%${q}%,placa_veiculo.ilike.%${q}%`
-      )
-    }
-
-    // mais perto de vencer primeiro (última aferição mais antiga), sem data por último
-    query = query
-      .order('data_ultima_afericao', { ascending: true, nullsFirst: false })
-      .range(from, to)
-
-    const { data, count } = await query
     if (!aindaVale()) return
-    setLeads((data as Caminhoneiro[]) ?? [])
-    setTotal(count ?? 0)
+    if (error) {
+      setLeads([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
+    const res = data as { total: number; leads: Caminhoneiro[] } | null
+    setLeads(res?.leads ?? [])
+    setTotal(Number(res?.total ?? 0))
     setLoading(false)
   }, [page, filtro, buscaDebounced, filtroUnidade])
 

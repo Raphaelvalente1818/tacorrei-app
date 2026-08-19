@@ -139,7 +139,8 @@ export default function LeadDetail() {
     if (!id) return
     setLoading(true)
     const [leadRes, ligacoesRes, agendamentosRes] = await Promise.all([
-      supabase.from('caminhoneiros').select('*').eq('id', id).single(),
+      // Pela RPC, para registrar quem abriu qual ficha (a RLS continua valendo).
+      supabase.rpc('obter_lead', { p_id: id }),
       supabase
         .from('ligacoes')
         .select('*')
@@ -151,7 +152,7 @@ export default function LeadDetail() {
         .eq('caminhoneiro_id', id)
         .order('data_hora', { ascending: false }),
     ])
-    setLead((leadRes.data as Caminhoneiro) ?? null)
+    setLead((leadRes.data as Caminhoneiro | null) ?? null)
     setLigacoes((ligacoesRes.data as Ligacao[]) ?? [])
     setAgendamentos((agendamentosRes.data as Agendamento[]) ?? [])
     setLoading(false)
