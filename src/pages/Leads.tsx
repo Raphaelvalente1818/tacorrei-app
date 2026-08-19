@@ -22,13 +22,16 @@ const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Sem tacógrafo', value: 'sem_tacografo' },
 ]
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 100
 
-// Quais números de página mostrar. Com 19 páginas não cabe tudo, então:
-// sempre a primeira e a última, a atual com uma vizinha de cada lado, e '…' nos
-// buracos. O resultado tem largura fixa — a barra não "pula" ao trocar de página.
+// Um quadradinho por página. Com 100 por página a operadora tem ~6 a 10 páginas,
+// e todas cabem na tela — é o caso normal. Acima de 12 (só acontece no admin
+// olhando a base inteira) volta a resumir com '…', senão viraria uma fileira de
+// 100 quadradinhos.
+const MAX_QUADRADINHOS = 12
+
 function paginasVisiveis(atual: number, total: number): (number | '…')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (total <= MAX_QUADRADINHOS) return Array.from({ length: total }, (_, i) => i + 1)
 
   const paginas = new Set<number>([1, total, atual, atual - 1, atual + 1])
   // perto das pontas, estica para o outro lado para manter sempre 7 posições
@@ -77,6 +80,7 @@ export default function Leads() {
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [showNovo, setShowNovo] = useState(false)
+  const [irPara, setIrPara] = useState('')
 
   // debounce da busca
   useEffect(() => {
@@ -142,6 +146,16 @@ export default function Leads() {
   const temProxima = fim < total
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const paginas = paginasVisiveis(page + 1, totalPaginas)
+
+  // "Ir para a página": aceita Enter ou o botão. Fora do intervalo, corrige para
+  // a página mais próxima em vez de recusar — digitar 50 numa lista de 19 vai
+  // para a 19, que é o que a pessoa queria dizer.
+  function irParaPagina() {
+    const n = parseInt(irPara, 10)
+    if (!Number.isFinite(n)) return
+    setPage(Math.min(Math.max(n, 1), totalPaginas) - 1)
+    setIrPara('')
+  }
 
   return (
     <div>
@@ -235,11 +249,36 @@ export default function Leads() {
         )}
 
         {!loading && total > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-line text-sm text-ink-6">
-            <span>
-              Mostrando {inicio}–{fim} de {total} leads
-            </span>
-            <div className="flex items-center gap-1.5">
+          <div className="px-5 py-3 border-t border-line text-sm text-ink-6 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span>
+                Mostrando {inicio}–{fim} de {total} leads
+              </span>
+              {totalPaginas > MAX_QUADRADINHOS && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-ink-4">Ir para</span>
+                  <input
+                    value={irPara}
+                    onChange={(e) => setIrPara(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={(e) => e.key === 'Enter' && irParaPagina()}
+                    inputMode="numeric"
+                    placeholder={String(totalPaginas)}
+                    aria-label={`Ir para a página (1 a ${totalPaginas})`}
+                    className="w-14 px-2 py-1.5 border border-line rounded-lg text-sm text-center tabular-nums focus-ring outline-none bg-card"
+                  />
+                  <button
+                    onClick={irParaPagina}
+                    disabled={!irPara}
+                    className="px-2.5 py-1.5 rounded-lg border border-line text-sm font-bold disabled:opacity-40 hover:bg-white/5"
+                  >
+                    Ir
+                  </button>
+                  <span className="text-xs text-ink-4">de {totalPaginas}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={!temAnterior}
@@ -261,7 +300,7 @@ export default function Leads() {
                     key={p}
                     onClick={() => setPage(p - 1)}
                     aria-current={p === page + 1 ? 'page' : undefined}
-                    className={`min-w-8 px-2.5 py-1.5 rounded-lg border text-sm font-bold tabular-nums transition-colors ${
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg border text-sm font-bold tabular-nums transition-colors ${
                       p === page + 1
                         ? 'bg-brand text-[#04120a] border-brand'
                         : 'border-line text-ink-6 hover:bg-white/5'
