@@ -218,8 +218,30 @@ function Producao() {
   )
 }
 
+// Retrato de cada unidade (RPC `unidades_painel`): carteira → fila → abordados → aferidos.
+interface UnidadePainel {
+  id: string
+  nome: string
+  janela_dias: number | null
+  cidades: string | null
+  carteira: number
+  fila: number
+  abordados: number
+  aferidos: number
+}
+
+// Percentual da fila já abordada. Abaixo de 1% mostra uma casa decimal, senão
+// "5%" e "0%" ficariam indistinguíveis para quem mal começou.
+function pctFila(abordados: number, fila: number): string | null {
+  if (fila <= 0) return null
+  const p = (abordados / fila) * 100
+  if (p === 0) return '0%'
+  if (p < 1) return `${p.toFixed(1).replace('.', ',')}%`
+  return `${Math.round(p)}%`
+}
+
 function Unidades() {
-  const [unidades, setUnidades] = useState<ProdUnidade[]>([])
+  const [unidades, setUnidades] = useState<UnidadePainel[]>([])
   const [loading, setLoading] = useState(true)
   const [nova, setNova] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -229,8 +251,8 @@ function Unidades() {
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.rpc('producao_unidades', { p_dias: null })
-    setUnidades((data as ProdUnidade[]) ?? [])
+    const { data } = await supabase.rpc('unidades_painel')
+    setUnidades((data as UnidadePainel[]) ?? [])
     setLoading(false)
   }, [])
 
@@ -292,7 +314,10 @@ function Unidades() {
             <thead>
               <tr className="text-left text-ink-4 text-xs uppercase font-bold border-b border-line">
                 <th className="px-5 py-3">Unidade</th>
-                <th className="px-5 py-3 text-right">Leads (com tacógrafo)</th>
+                <th className="px-5 py-3 text-right">Carteira</th>
+                <th className="px-5 py-3 text-right">Na fila</th>
+                <th className="px-5 py-3 text-right">Abordados</th>
+                <th className="px-5 py-3 text-right">Aferidos</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
@@ -314,10 +339,50 @@ function Unidades() {
                         </button>
                       </span>
                     ) : (
-                      u.nome
+                      <>
+                        {u.nome}
+                        <span className="block text-[11px] font-semibold text-ink-4 mt-0.5">
+                          {u.cidades ?? 'sem cidades'}
+                        </span>
+                      </>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-right text-ink-6">{num(u.leads)}</td>
+
+                  <td className="px-5 py-3 text-right text-ink-4 font-bold tabular-nums">
+                    {num(u.carteira)}
+                  </td>
+
+                  <td className="px-5 py-3 text-right text-lucro font-extrabold tabular-nums">
+                    {num(u.fila)}
+                  </td>
+
+                  {/* Abordados: o número manda, o % da fila acompanha, e a barra
+                      desenha essa mesma %. Fila zerada → não há o que medir. */}
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex items-baseline justify-end gap-3">
+                      <span className="font-extrabold text-ink tabular-nums">{num(u.abordados)}</span>
+                      {pctFila(u.abordados, u.fila) && (
+                        <span className="text-xs font-bold text-ink-4">
+                          {pctFila(u.abordados, u.fila)}
+                        </span>
+                      )}
+                    </div>
+                    {u.fila > 0 && (
+                      <div className="h-1.5 rounded-full bg-line overflow-hidden w-28 ml-auto mt-2">
+                        {u.abordados > 0 && (
+                          <div
+                            className="h-full rounded-full bg-brand"
+                            style={{ width: `${Math.max((u.abordados / u.fila) * 100, 1.5)}%` }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-5 py-3 text-right tabular-nums font-extrabold">
+                    <span className={u.aferidos > 0 ? 'text-ink' : 'text-ink-4'}>{num(u.aferidos)}</span>
+                  </td>
+
                   <td className="px-5 py-3 text-right">
                     {editId !== u.id && (
                       <button
@@ -337,6 +402,28 @@ function Unidades() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="card p-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-2">O que cada coluna conta</p>
+        <dl className="text-sm text-ink-6 space-y-1.5">
+          <div className="flex gap-2">
+            <dt className="font-bold text-ink shrink-0">Carteira</dt>
+            <dd>— total com tacógrafo.</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="font-bold text-ink shrink-0">Na fila</dt>
+            <dd>— a vencer dentro da janela da unidade, mais os que já venceram. É o trabalho de hoje.</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="font-bold text-ink shrink-0">Abordados</dt>
+            <dd>— mensagem enviada, e quanto isso representa da fila. Conta o lead uma vez, não o número de mensagens.</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="font-bold text-ink shrink-0">Aferidos</dt>
+            <dd>— aferidos na unidade.</dd>
+          </div>
+        </dl>
       </div>
     </div>
   )
