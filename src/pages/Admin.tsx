@@ -567,8 +567,12 @@ interface CidadeCobertura {
   cidade: string
 }
 
+// Atalhos de janela. O banco aceita qualquer número de dias (1 a 3650) ou NULL
+// (= base toda); estes são só os valores de uso comum. Se a unidade estiver com
+// um número fora desta lista, ele aparece como um chip extra em "Janela atual".
 const JANELAS: { label: string; dias: number | null }[] = [
   { label: '30 dias', dias: 30 },
+  { label: '45 dias', dias: 45 },
   { label: '60 dias', dias: 60 },
   { label: 'Base toda', dias: null },
 ]
@@ -674,7 +678,7 @@ function Cobertura() {
           <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1.5">
             Janela — o que a unidade recebe
           </label>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 flex-wrap">
             {JANELAS.map((j) => {
               const on = (unidadeSel?.janela_dias ?? null) === j.dias
               return (
@@ -689,10 +693,20 @@ function Cobertura() {
                 </button>
               )
             })}
+            {/* Janela definida direto no banco, fora dos atalhos: mostra o valor real
+                em vez de deixar todos os chips apagados (o que parecia "nenhuma janela"). */}
+            {unidadeSel?.janela_dias != null &&
+              !JANELAS.some((j) => j.dias === unidadeSel.janela_dias) && (
+                <span className="px-3.5 py-1.5 rounded-full text-xs font-bold border bg-brand text-[#04120a] border-brand">
+                  {unidadeSel.janela_dias} dias
+                </span>
+              )}
           </div>
           <p className="text-xs text-ink-4 mt-2">
-            30 ou 60 dias = a equipe só vê os veículos que vencem nesse prazo. “Base toda” = todos os leads com
-            tacógrafo da unidade. Unidades novas já nascem em 30 dias.
+            A janela é um <strong>prazo</strong>, não uma fatia da base: a equipe vê quem já está vencido mais quem
+            vence dentro desse prazo. Quem vence depois entra na fila sozinho quando a data se aproxima. “Base toda”
+            = todos os leads com tacógrafo da unidade, inclusive os que só vencem daqui a muito tempo. Unidades novas
+            nascem em 30 dias.
           </p>
         </div>
       </div>
