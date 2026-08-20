@@ -118,16 +118,15 @@ function StatTile({
   )
 }
 
-async function contar(unidadeId: string | null, status?: StatusLead): Promise<number> {
-  // Conta apenas o público-alvo (veículos com tacógrafo); ignora os "sem tacógrafo".
-  let query = supabase
-    .from('caminhoneiros')
-    .select('*', { count: 'exact', head: true })
-    .eq('tem_tacografo', true)
-  if (unidadeId) query = query.eq('unidade_id', unidadeId)
-  if (status) query = query.eq('status', status)
-  const { count } = await query
-  return count ?? 0
+// Uma chamada só devolve todas as contagens. Antes eram 6 consultas diretas na
+// tabela — o Dashboard era o último lugar que ainda lia `caminhoneiros` sem passar
+// pelo servidor. Conta apenas o público-alvo (com tacógrafo).
+type Contagens = { total: number } & Partial<Record<StatusLead, number>>
+
+async function buscarContagens(unidadeId: string | null): Promise<Contagens> {
+  const { data, error } = await supabase.rpc('contar_leads', { p_unidade: unidadeId })
+  if (error || !data) return { total: 0 }
+  return data as Contagens
 }
 
 export default function Dashboard() {
@@ -147,15 +146,12 @@ export default function Dashboard() {
     let cancelado = false
     ;(async () => {
       setLoading(true)
-      const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
-      const [tot, ...counts] = await Promise.all([
-        contar(filtroUnidade),
-        ...statuses.map((s) => contar(filtroUnidade, s)),
-      ])
+      const c = await buscarContagens(filtroUnidade)
       if (cancelado) return
+      const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
       const map: Record<string, number> = {}
-      statuses.forEach((s, i) => (map[s] = counts[i]))
-      setTotal(tot)
+      statuses.forEach((s) => (map[s] = Number(c[s] ?? 0)))
+      setTotal(Number(c.total ?? 0))
       setPorStatus(map)
       setLoading(false)
     })()

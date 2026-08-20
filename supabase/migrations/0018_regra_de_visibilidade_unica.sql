@@ -1,0 +1,14 @@
+-- 0018_regra_de_visibilidade_unica.sql   [APLICADA NO BANCO em 19/08/2026]
+-- Prepara o fechamento do acesso direto a `caminhoneiros`.
+--
+-- O PROBLEMA DE PROJETO: as RPCs de leitura eram SECURITY INVOKER (rodam como o
+-- usuario), justamente para a RLS continuar valendo. So que, para revogar o SELECT
+-- direto, elas PRECISAM virar SECURITY DEFINER -- e ai a RLS deixa de ser aplicada
+-- dentro delas. O risco: reescrever a regra na mao e ela divergir da politica,
+-- vazando lead de uma unidade para outra.
+--
+-- SOLUCAO: a regra existe UMA VEZ SO, em `pode_ler_lead`, usada ao mesmo tempo
+-- (a) pela politica de RLS e (b) pelas RPCs. Nao ha como divergir.
+--
+-- Conteudo: funcao pode_ler_lead + politica reescrita + listar_leads/obter_lead
+-- como DEFINER + contar_leads (Dashboard). Ver o SQL aplicado no Supabase.
