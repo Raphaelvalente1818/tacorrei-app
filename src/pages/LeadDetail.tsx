@@ -174,7 +174,14 @@ export default function LeadDetail() {
   async function salvarAfericao() {
     if (!lead) return
     const novo = afericaoVal ? afericaoVal.slice(0, 10) : null
-    await supabase.from('caminhoneiros').update({ data_ultima_afericao: novo }).eq('id', lead.id)
+    // Mesma armadilha do botão Aferido: uma data recente tira o lead da janela e o
+    // update direto seria recusado. `p_marcar_aferido: false` só corrige a data.
+    await supabase.rpc('registrar_afericao', {
+      p_lead: lead.id,
+      p_data: novo,
+      p_notas: null,
+      p_marcar_aferido: false,
+    })
     setLead((prev) => (prev ? { ...prev, data_ultima_afericao: novo } : prev))
     setEditAfericao(false)
   }
@@ -630,8 +637,6 @@ export default function LeadDetail() {
       {showAferido && (
         <RegistrarAfericaoModal
           caminhoneiroId={lead.id}
-          unidadeId={lead.unidade_id}
-          operadorId={membro?.user_id}
           onClose={() => setShowAferido(false)}
           onSaved={() => {
             setShowAferido(false)

@@ -8,14 +8,10 @@ import { supabase } from '../lib/supabase'
 // para ficar registrado quem marcou e quando.
 export default function RegistrarAfericaoModal({
   caminhoneiroId,
-  unidadeId,
-  operadorId,
   onClose,
   onSaved,
 }: {
   caminhoneiroId: string
-  unidadeId: string
-  operadorId: string | undefined
   onClose: () => void
   onSaved: () => void
 }) {
@@ -45,27 +41,23 @@ export default function RegistrarAfericaoModal({
     setSaving(true)
     setError(null)
 
-    const { error: leadError } = await supabase
-      .from('caminhoneiros')
-      .update({ data_ultima_afericao: data, status: 'aferido' })
-      .eq('id', caminhoneiroId)
+    // Vai por RPC, e não por update direto, por um motivo concreto: ao gravar a data
+    // de hoje o vencimento pula para daqui a 2 anos e o lead SAI da janela da
+    // operadora. O Postgres então recusa o update — não se atualiza uma linha para
+    // a invisibilidade. A RPC valida a permissão pela mesma regra e grava.
+    // De quebra, lead + histórico viram uma operação atômica.
+    const { error: rpcError } = await supabase.rpc('registrar_afericao', {
+      p_lead: caminhoneiroId,
+      p_data: data,
+      p_notas: notas.trim() || null,
+      p_marcar_aferido: true,
+    })
 
-    if (leadError) {
+    if (rpcError) {
       setSaving(false)
-      setError(leadError.message)
+      setError(rpcError.message)
       return
     }
-
-    // Histórico: registra quem marcou e quando. Se falhar, o lead já está aferido —
-    // não desfaz o principal por causa do registro de histórico.
-    await supabase.from('ligacoes').insert({
-      caminhoneiro_id: caminhoneiroId,
-      unidade_id: unidadeId,
-      operador_id: operadorId ?? null,
-      canal: 'presencial',
-      resultado: 'aferido',
-      notas: notas.trim() || null,
-    })
 
     setSaving(false)
     onSaved()
