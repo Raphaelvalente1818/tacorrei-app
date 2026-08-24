@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, ChevronLeft, ChevronRight, CheckCircle2, Truck, MessageCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import type { Caminhoneiro, StatusLead } from '../lib/database.types'
 import { STATUS_LEAD_CLASSES, STATUS_LEAD_LABEL } from '../lib/status'
 import Badge from '../components/Badge'
 import NovoLeadModal from '../components/NovoLeadModal'
+import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
 
 type FiltroLead = StatusLead | 'todos' | 'sem_tacografo'
 
@@ -71,6 +72,19 @@ function vencimento(iso: string | null): { texto: string; classe: string } | nul
 // de cair no topo da página 1. Fica em sessionStorage (morre ao fechar a aba).
 const LS_ULTIMO_LEAD = 'lacre.ultimoLead'
 
+// A lista mostra só a janela (45 dias). Em São Bernardo isso deixa 1.500 leads da
+// carteira fora do alcance da operadora — e quando um desses caminhões aparece na
+// porta para aferir, ela busca a placa, não acha, e o "Novo lead" criaria uma
+// duplicata: a linha antiga guardaria a data velha e voltaria para a fila depois.
+// Por isso, quando a busca não devolve nada E o que foi digitado é uma placa
+// inteira, o app faz uma segunda consulta que alcança a unidade toda — uma placa
+// por vez, no máximo um resultado, registrada no log. É preciso já saber a placa;
+// não dá para varrer base com isso.
+function normalizaPlaca(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+const PLACA_COMPLETA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/
+
 export default function Leads() {
   const { membro } = useAuth()
   const filtroUnidade = useFiltroUnidade()
@@ -89,6 +103,26 @@ export default function Leads() {
   const [total, setTotal] = useState(0)
   const [showNovo, setShowNovo] = useState(false)
   const [irPara, setIrPara] = useState('')
+  // Achado da busca por placa exata (fora da janela) — ver comentário em normalizaPlaca.
+  const [foraDaJanela, setForaDaJanela] = useState<Caminhoneiro | null>(null)
+  const [placaAferir, setPlacaAferir] = useState<string | null>(null)
+  const [placaAferida, setPlacaAferida] = useState(false)
+  // Cota de WhatsApp do dia — a operadora precisa ver quanto sobrou ANTES de
+  // começar a rodada, não descobrir no meio que a trava fechou.
+  const [cota, setCota] = useState<{ limite: number; usadas: number; restantes: number } | null>(null)
+
+  useEffect(() => {
+    let cancelado = false
+    supabase.rpc('cota_whatsapp_hoje', { p_unidade: filtroUnidade }).then(({ data, error }) => {
+      if (cancelado || error || !data) return
+      const c = data as { limite: number | null; usadas: number; restantes: number | null }
+      if (c.limite == null || c.restantes == null) return
+      setCota({ limite: c.limite, usadas: c.usadas, restantes: c.restantes })
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [filtroUnidade, leads])
 
   // debounce da busca
   useEffect(() => {
@@ -177,6 +211,25 @@ export default function Leads() {
     return () => clearTimeout(t)
   }, [loading, leads])
 
+  // Segunda tentativa: a lista não achou nada e o que foi digitado é uma placa
+  // completa. Só então vale a pena alcançar a base inteira da unidade.
+  useEffect(() => {
+    setForaDaJanela(null)
+    setPlacaAferida(false)
+    if (loading) return
+    const placa = normalizaPlaca(buscaDebounced.trim())
+    if (total > 0 || !PLACA_COMPLETA.test(placa)) return
+
+    let cancelado = false
+    supabase.rpc('buscar_por_placa', { p_placa: placa }).then(({ data, error }) => {
+      if (cancelado || error || !data) return
+      setForaDaJanela(data as Caminhoneiro)
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [loading, total, buscaDebounced])
+
   const inicio = total === 0 ? 0 : page * PAGE_SIZE + 1
   const fim = Math.min((page + 1) * PAGE_SIZE, total)
   const temAnterior = page > 0
@@ -219,6 +272,23 @@ export default function Leads() {
             className="pl-8 pr-3 py-2 border border-line rounded-xl text-sm w-72 focus-ring outline-none bg-card"
           />
         </div>
+        {cota && (
+          <div
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${
+              cota.restantes === 0
+                ? 'border-rose-500/40 text-rose-400 bg-rose-500/10'
+                : cota.restantes <= 10
+                  ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                  : 'border-line text-ink-6'
+            }`}
+            title="Limite diário de mensagens da unidade. Protege o número de WhatsApp contra bloqueio."
+          >
+            <MessageCircle size={14} />
+            {cota.restantes === 0
+              ? `Cota de hoje encerrada (${cota.limite})`
+              : `${cota.restantes} de ${cota.limite} mensagens hoje`}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {filtros.map((f) => (
             <button
@@ -235,6 +305,49 @@ export default function Leads() {
           ))}
         </div>
       </div>
+
+      {/* Caminhão que está na base da unidade mas fora da janela — normalmente o
+          walk-in que apareceu para aferir antes da hora. Some do caminho assim que
+          a busca muda. Registrar por aqui evita a duplicata do "Novo lead". */}
+      {foraDaJanela && (
+        <div className="card p-5 mb-4 border-brand/40">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-brand/15 text-brand flex items-center justify-center shrink-0">
+              <Truck size={16} strokeWidth={2.3} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
+                Fora da fila, mas está na sua base
+              </p>
+              <p className="text-sm font-bold text-ink">{foraDaJanela.nome}</p>
+              <p className="text-sm text-ink-6">
+                {foraDaJanela.placa_veiculo}
+                {foraDaJanela.cidade ? ` · ${foraDaJanela.cidade}` : ''}
+                {(() => {
+                  const v = vencimento(foraDaJanela.data_ultima_afericao)
+                  return v ? ` · vence ${v.texto}` : ''
+                })()}
+              </p>
+              <p className="text-xs text-ink-4 mt-1">
+                Não aparece na lista porque o vencimento ainda está longe. Se ele veio aferir agora,
+                registre por aqui — não crie um lead novo, senão a placa fica duplicada.
+              </p>
+            </div>
+            {placaAferida ? (
+              <span className="flex items-center gap-1.5 text-sm font-bold text-lucro shrink-0">
+                <CheckCircle2 size={16} /> Registrado
+              </span>
+            ) : (
+              <button
+                onClick={() => setPlacaAferir(foraDaJanela.id)}
+                className="flex items-center gap-1.5 bg-brand text-[#04120a] text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-brand-d transition-colors shrink-0"
+              >
+                <CheckCircle2 size={16} /> Aferido
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         {loading ? (
@@ -376,6 +489,17 @@ export default function Leads() {
           </div>
         )}
       </div>
+
+      {placaAferir && (
+        <RegistrarAfericaoModal
+          caminhoneiroId={placaAferir}
+          onClose={() => setPlacaAferir(null)}
+          onSaved={() => {
+            setPlacaAferir(null)
+            setPlacaAferida(true)
+          }}
+        />
+      )}
 
       {showNovo && (
         <NovoLeadModal

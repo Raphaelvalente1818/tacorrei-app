@@ -163,7 +163,15 @@ export default function Dashboard() {
   const contatados = total - (porStatus['novo'] ?? 0)
   const agendados = porStatus['agendado'] ?? 0
   const aferidos = porStatus['aferido'] ?? 0
-  const taxaConversao = total > 0 ? Math.round((aferidos / total) * 100) : 0
+  // Denominador = leads ABORDADOS, não a carteira inteira. Sobre a carteira, 6 de 1.351
+  // dá 0,44% e o arredondamento exibia "0%" — o painel dizia que nada tinha convertido
+  // justamente quando seis aferições já tinham sido feitas. Além disso, dividir pela
+  // carteira mede o tamanho da base, não o trabalho: quem tem mais leads parados sempre
+  // parece pior. Sobre quem foi abordado, o número responde à pergunta certa —
+  // "de cada 100 que falamos, quantos vieram aferir?". Uma casa decimal para o começo,
+  // quando ainda são poucos casos.
+  const taxaConversao = contatados > 0 ? (aferidos / contatados) * 100 : 0
+  const taxaTexto = taxaConversao >= 10 ? taxaConversao.toFixed(0) : taxaConversao.toFixed(1)
   const funil = FUNIL_ORDEM.map(({ status, label }) => ({ label, total: porStatus[status] ?? 0 }))
 
   return (
@@ -216,8 +224,13 @@ export default function Dashboard() {
               <span className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-2">
                 Taxa de conversão
               </span>
-              <div className="text-4xl font-extrabold text-lucro mb-1">{taxaConversao}%</div>
-              <p className="text-xs text-ink-4">dos leads totais chegaram a ser aferidos</p>
+              <div className="text-4xl font-extrabold text-lucro mb-1">
+                {taxaTexto.replace('.', ',')}%
+              </div>
+              <p className="text-xs text-ink-4">
+                {aferidos.toLocaleString('pt-BR')} de {contatados.toLocaleString('pt-BR')} leads
+                abordados chegaram a ser aferidos
+              </p>
             </div>
           </div>
         </>

@@ -32,14 +32,14 @@ type MarcaUnidade = { marca: string; endereco: string }
 
 const MARCA_PADRAO: MarcaUnidade = {
   marca: 'Lacre Tacógrafos',
-  endereco: 'Av. dos Estados, 7050, Santo André',
+  endereco: 'Av. dos Estados, 7050, Santo André/SP',
 }
 
 const MARCA_POR_UNIDADE: Record<string, MarcaUnidade> = {
   [UNIDADE_SANTO_ANDRE]: MARCA_PADRAO,
   [UNIDADE_SAO_BERNARDO]: {
     marca: 'Tacorrei Tacógrafos',
-    endereco: 'Rua dos Feltrins, 1300 bairro Demarchi - São Bernardo',
+    endereco: 'Rua dos Feltrins, 1300, bairro Demarchi, São Bernardo/SP',
   },
 }
 
@@ -78,39 +78,119 @@ function numeroWhatsapp(tel: string | null): string | null {
   return d.startsWith('55') ? d : '55' + d
 }
 
-// Escolhe a mensagem conforme a situação: vencido, a vencer ou sem data de aferição.
-function montarMensagem(lead: Caminhoneiro, info: { venc: Date; vencido: boolean } | null): string {
-  const placa = lead.placa_veiculo
+// ── Mensagem de WhatsApp ─────────────────────────────────────────────────────
+// Texto aprovado pelo Raphael em 24/08, depois de várias rodadas. A versão anterior
+// abria com ⚠️⚠️⚠️, ameaçava multa antes de dizer quem estava falando e não deixava
+// saída para quem não é mais dono do veículo — o desenho exato de uma mensagem que a
+// pessoa denuncia. E denúncia, não volume, é o que derruba um número de WhatsApp.
+//
+// A estrutura tem quatro blocos, nesta ordem, e cada um faz um trabalho:
+//   1. Quem está falando  → desarma o "que número é esse?"
+//   2. O fato, sem drama  → informa, não ameaça
+//   3. O convite          → curto, sem promessa de horário
+//   4. A porta de saída   → quem não é mais dono responde em vez de denunciar
+//      (é a linha mais barata do texto e a que mais protege o número)
+//
+// A oficina NÃO trabalha com hora marcada. Nenhum texto promete horário.
+
+// "JOSE TADEU DIAS" → "José"... na medida do possível. Cadastro de empresa não tem
+// primeiro nome: nesses casos a saudação sai sem nome, que é melhor que "Olá, Grupo".
+const MARCAS_DE_EMPRESA = /\b(LTDA|ME|EPP|EIRELI|MEI|S\/A|SA|TRANSPORTES?|TRANSP|COMERCIO|COM|IND|INDUSTRIA|SERVICOS?|LOGISTICA|GRUPO|CIA)\b/i
+
+function primeiroNome(nome: string | null): string | null {
+  if (!nome) return null
+  if (MARCAS_DE_EMPRESA.test(nome)) return null
+  const bruto = nome.trim().split(/\s+/)[0]
+  if (!bruto || bruto.length < 3) return null
+  return bruto.charAt(0).toUpperCase() + bruto.slice(1).toLowerCase()
+}
+
+// "Aqui é a Ivanessa" / "Aqui é o Cicero". O artigo vem do nome: em português,
+// nome terminado em 'a' é quase sempre feminino. Acerta as sete pessoas da equipe
+// hoje; se um dia entrar um "Nicola" ou uma "Isabel", vira campo no cadastro.
+function assinatura(atendente: string | null | undefined, marca: string): string {
+  const quem = primeiroNome(atendente ?? null)
+  if (!quem) return `Aqui é da ${marca}`
+  const artigo = quem.slice(-1).toLowerCase() === 'a' ? 'a' : 'o'
+  return `Aqui é ${artigo} ${quem}, da ${marca}`
+}
+
+// "Bom dia" fixo às 15h entrega o robô.
+function saudacao(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Bom dia'
+  if (h < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
+function montarMensagem(
+  lead: Caminhoneiro,
+  info: { venc: Date; vencido: boolean } | null,
+  atendente?: string | null
+): string {
   const { marca, endereco } = marcaDoLead(lead)
+  const nome = primeiroNome(lead.nome)
+  const abre = nome ? `${saudacao()}, ${nome}!` : `${saudacao()}!`
+
+  // Cabeçalho: saudação, quem assina e o credenciamento — nesta ordem, sempre.
+  const cabecalho = `${abre}
+${assinatura(atendente, marca)}
+Posto de ensaio credenciado pelo Inmetro`
+
+  // "da placa ABC1D23" ou "do seu veículo" — evita concordância remendada no texto.
+  const doVeiculo = lead.placa_veiculo ? `da placa ${lead.placa_veiculo}` : 'do seu veículo'
+  const oVeiculo = lead.placa_veiculo ? `a placa ${lead.placa_veiculo}` : 'o seu veículo'
+
+  const rodape = `Se esse veículo não for mais seu, me avisa que eu retiro do cadastro.
+Estou à sua disposição para qualquer dúvida.
+
+Estamos na ${endereco}`
 
   if (info && info.vencido) {
-    const veiculo = placa ? `Veículo com a placa ${placa}` : 'Seu veículo'
-    return `⚠️⚠️⚠️
-Bom dia!
-${veiculo} está com o certificado do Tacógrafo vencido desde ${fmtDia(info.venc)}.
-Atualize e evite multas.
-${marca}
-Ensaio Inmetro
-End: ${endereco}
-Temos condições especiais para você.`
+    const meses = Math.floor((Date.now() - info.venc.getTime()) / (30 * 86400000))
+
+    // Vencido há muito tempo: quase sempre caminhão vendido ou sem tacógrafo.
+    // Aqui não se AFIRMA nada — pergunta-se. Afirmar para quem não tem mais o
+    // veículo é o caminho mais curto para a denúncia. Com o piso de 12 meses este
+    // caso não chega à operadora; fica valendo para o admin e caso o piso mude.
+    if (meses > 36) {
+      return `${cabecalho}
+
+Verificamos aqui que ${oVeiculo} aparece sem aferição de tacógrafo há bastante tempo. Esse veículo ainda é seu e ainda usa tacógrafo?
+
+Se ainda usa, eu te explico como funciona.
+
+${rodape}`
+    }
+
+    return `${cabecalho}
+
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.
+
+Venha aferir com a gente e já saia com tudo em dia.
+
+${rodape}`
   }
 
   if (info && !info.vencido) {
-    const inicio = placa ? `Veículo com a placa ${placa}: o` : 'O'
-    return `✅ Lembrete importante!
-${inicio} certificado do Tacógrafo vence em ${fmtDia(info.venc)}.
-Agende com antecedência e evite a correria de última hora e o risco de multa.
-${marca} — Ensaio Inmetro
-End: ${endereco}
-Temos condições especiais para você.`
+    return `${cabecalho}
+
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.
+
+Venha aferir com a gente antes do prazo e já saia com tudo em dia.
+
+${rodape}`
   }
 
-  // Sem data de aferição registrada — não sabemos o vencimento
-  const inicio = placa ? `Para o veículo de placa ${placa}: v` : 'V'
-  return `Olá! Aqui é da ${marca} (Ensaio Inmetro).
-${inicio}ocê sabe a data da última aferição do tacógrafo? O certificado vale 2 anos, e circular vencido gera multa.
-Se quiser, a gente confere e já agenda pra você. Temos condições especiais.
-End: ${endereco}`
+  // Sem data de aferição = sem tacógrafo. Esses leads não aparecem para a operadora;
+  // este texto só existe para o caso raro de um cadastro criado à mão.
+  return `${cabecalho}
+
+Você sabe a data da última aferição do tacógrafo ${doVeiculo}? O certificado vale 2 anos.
+
+Se quiser, eu confiro para você e a gente já deixa tudo em dia.
+
+${rodape}`
 }
 
 export default function LeadDetail() {
@@ -204,32 +284,51 @@ export default function LeadDetail() {
       setAlerta('Este lead não tem um número de celular válido para envio de WhatsApp.')
       return
     }
-    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao)))
+    if (lead.data_ultimo_whatsapp) {
+      setAlerta('Este lead já recebeu uma mensagem. A regra é uma por cliente — insistir é o que mais gera bloqueio. Ele volta a ser abordável depois da próxima aferição.')
+      return
+    }
+    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao), membro?.nome))
     setShowWhats(true)
   }
 
   // Abre o WhatsApp Web com a mensagem e registra o envio.
+  //
+  // O registro vem PRIMEIRO e vai por RPC, não por INSERT direto. É lá que moram as
+  // três travas — uma mensagem por lead, cota diária da unidade e faixa de vencimento.
+  // Se a RPC recusar, o WhatsApp nem abre: adiantaria pouco impedir o registro depois
+  // que a mensagem já saiu. Custo: o `window.open` deixa de ser síncrono ao clique e
+  // alguns navegadores bloqueiam o popup — por isso, se ele não abrir, mostramos o
+  // link para a operadora clicar.
   async function enviarWhatsapp() {
     if (!lead) return
     const num = numeroWhatsapp(lead.telefone)
     if (!num) return
-    // window.open síncrono ao clique (evita bloqueio de popup)
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(whatsMsg)}`, '_blank')
 
-    const agora = new Date().toISOString()
-    await supabase.from('ligacoes').insert({
-      caminhoneiro_id: lead.id,
-      operador_id: membro?.user_id ?? null,
-      resultado: 'whatsapp_enviado',
-      canal: 'whatsapp',
-      notas: whatsMsg,
+    const { data, error } = await supabase.rpc('registrar_envio_whatsapp', {
+      p_lead: lead.id,
+      p_mensagem: whatsMsg,
     })
-    const novoStatus =
-      lead.status === 'novo' || lead.status === 'sem_resposta' ? 'mensagem_enviada' : lead.status
-    await supabase
-      .from('caminhoneiros')
-      .update({ data_ultimo_whatsapp: agora, status: novoStatus })
-      .eq('id', lead.id)
+
+    if (error) {
+      setShowWhats(false)
+      setAlerta(error.message)
+      return
+    }
+
+    const janela = window.open(`https://wa.me/${num}?text=${encodeURIComponent(whatsMsg)}`, '_blank')
+    if (!janela) {
+      setAlerta('O navegador bloqueou a abertura do WhatsApp. O envio já foi registrado — abra a conversa manualmente.')
+    }
+
+    const cota = data as { restantes: number; limite: number } | null
+    if (cota && cota.restantes <= 5) {
+      setAlerta(
+        cota.restantes === 0
+          ? `Cota do dia encerrada (${cota.limite} mensagens). Voltam amanhã.`
+          : `Atenção: restam ${cota.restantes} mensagens na cota de hoje.`
+      )
+    }
 
     setShowWhats(false)
     carregar()
