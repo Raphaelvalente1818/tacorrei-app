@@ -268,6 +268,14 @@ export default function Leads() {
     }
   }, [loading, total, buscaDebounced])
 
+  // Reparte os meses: atrasados somam numa chip só; os três primeiros meses à
+  // frente ficam à mão; o resto vai para a lista suspensa.
+  const mesAtual = new Date().toISOString().slice(0, 7)
+  const vencidos = meses.filter((m) => m.mes < mesAtual).reduce((s, m) => s + Number(m.novos ?? 0), 0)
+  const aFrente = meses.filter((m) => m.mes >= mesAtual)
+  const proximos = aFrente.slice(0, 3)
+  const outros = aFrente.slice(3)
+
   const inicio = total === 0 ? 0 : page * PAGE_SIZE + 1
   const fim = Math.min((page + 1) * PAGE_SIZE, total)
   const temAnterior = page > 0
@@ -300,14 +308,15 @@ export default function Leads() {
         </button>
       </div>
 
-      {/* Vencimento por mês. Substitui "qual página eu estava?" por "estou fazendo
-          outubro" — lote com significado, fácil de dividir entre as duas e fácil de
-          retomar no dia seguinte. O número na chip é quanto ainda está como Novo. */}
+      {/* Vencimento. A primeira versão desenhava uma chip por mês e virou uma
+          parede de 170 botões desde 2011 — o admin enxerga a base inteira, sem o
+          piso de 12 meses. Agora: os atrasados viram UMA chip agregada, ficam os
+          três meses à frente (que é o que se trabalha), e o resto sai da frente
+          numa lista. Uma linha só, sempre. */}
       {meses.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
-          <span className="text-xs font-bold uppercase tracking-wide text-ink-4 mr-1">
-            Vence em
-          </span>
+          <span className="text-xs font-bold uppercase tracking-wide text-ink-4 mr-1">Vence em</span>
+
           <button
             onClick={() => setMes(null)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
@@ -316,7 +325,22 @@ export default function Leads() {
           >
             Todos
           </button>
-          {meses.map((m) => (
+
+          {vencidos > 0 && (
+            <button
+              onClick={() => setMes(mes === 'vencidos' ? null : 'vencidos')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                mes === 'vencidos'
+                  ? 'bg-rose-500 text-white border-rose-500'
+                  : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
+              }`}
+              title="Certificado já vencido"
+            >
+              Vencidos <span className="tabular-nums opacity-80">{vencidos}</span>
+            </button>
+          )}
+
+          {proximos.map((m) => (
             <button
               key={m.mes}
               onClick={() => setMes(m.mes === mes ? null : m.mes)}
@@ -331,6 +355,21 @@ export default function Leads() {
               </span>
             </button>
           ))}
+
+          {outros.length > 0 && (
+            <select
+              value={outros.some((m) => m.mes === mes) ? (mes as string) : ''}
+              onChange={(e) => setMes(e.target.value || null)}
+              className="px-2.5 py-1.5 rounded-full text-xs font-bold border border-line bg-card text-ink-6 focus-ring outline-none"
+            >
+              <option value="">Outro mês…</option>
+              {outros.map((m) => (
+                <option key={m.mes} value={m.mes}>
+                  {rotuloMes(m.mes)} — {m.novos} sem contato
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
