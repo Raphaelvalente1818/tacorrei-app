@@ -535,17 +535,22 @@ export default function LeadDetail() {
                   Cliente da casa
                 </span>
               ) : lead.autorizou_whatsapp ? (
-                /* Clicável para desfazer. Marcar sem querer é fácil — e sem um jeito
-                   de voltar, um clique errado libera mensagem para quem nunca
-                   autorizou, que é exatamente o que derrubou o número em 28/08. */
-                <button
-                  onClick={() => marcarAutorizacao(false)}
-                  className="badge bg-teal-500/15 text-teal-300 border-teal-500/30 hover:bg-rose-500/15 hover:text-rose-300 hover:border-rose-500/30 transition-colors inline-flex items-center gap-1"
-                  title="Clique para desfazer a autorização"
-                >
-                  Autorizou receber mensagem
-                  <X size={11} />
-                </button>
+                /* O "desfazer" fica FORA do selo, como palavra. Dentro dele o × ficava
+                   apertado e quebrava linha — e um jeito de voltar precisa ser óbvio:
+                   marcar sem querer libera mensagem para quem nunca autorizou, que é
+                   exatamente o que derrubou o número em 28/08. */
+                <span className="inline-flex items-center gap-2">
+                  <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30">
+                    Autorizou receber mensagem
+                  </span>
+                  <button
+                    onClick={() => marcarAutorizacao(false)}
+                    className="text-xs font-bold text-ink-4 hover:text-rose-300 underline underline-offset-2"
+                    title="Volta a bloquear o envio de mensagem para este lead"
+                  >
+                    desfazer
+                  </button>
+                </span>
               ) : lead.posto_afericao ? (
                 <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30">
                   Cliente de concorrente
