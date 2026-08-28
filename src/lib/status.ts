@@ -32,6 +32,8 @@ export const RESULTADO_LIGACAO_LABEL: Record<ResultadoLigacao, string> = {
   reagendar: 'Ligar novamente',
   whatsapp_enviado: 'WhatsApp enviado',
   aferido: 'Aferição realizada',
+  autorizou_whatsapp: 'Autorizou receber WhatsApp',
+  atualizacao: 'Cadastro atualizado',
 }
 
 export const CANAL_CONTATO_LABEL: Record<CanalContato, string> = {
@@ -39,6 +41,7 @@ export const CANAL_CONTATO_LABEL: Record<CanalContato, string> = {
   ligacao_passiva: 'Ligação recebida',
   whatsapp: 'WhatsApp',
   presencial: 'Aferição',
+  sistema: 'Registro do sistema',
 }
 
 export const STATUS_AGENDAMENTO_LABEL: Record<StatusAgendamento, string> = {

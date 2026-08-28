@@ -5,6 +5,8 @@ import { useAuth } from '../lib/AuthContext'
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/leads', label: 'Leads & Ligações', icon: Phone, end: false },
+  // Empresas com contrato: não é fila de prospecção, é carteira a avisar.
+  { to: '/empresas', label: 'Empresas', icon: Building2, end: false },
   { to: '/agenda', label: 'Agenda de aferições', icon: CalendarClock, end: false },
 ]
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -37,9 +37,28 @@ export default function NovoLeadModal({
   const [renavam, setRenavam] = useState('')
   const [ultimaAfericao, setUltimaAfericao] = useState('')
   const [origem, setOrigem] = useState<OrigemLead>('outro')
+  // Empresa com contrato. Quando o veículo pertence a uma, ele SAI da fila de
+  // prospecção e passa a ser avisado pela relação mensal daquela empresa — o
+  // motorista que traz o caminhão pode ser qualquer um, então a placa é o vínculo.
+  const [empresaId, setEmpresaId] = useState('')
+  const [empresas, setEmpresas] = useState<Array<{ id: string; nome: string }>>([])
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelado = false
+    const alvo = isAdmin && unidadeId ? unidadeId : unidadeAtiva
+    let q = supabase.from('empresas').select('id,nome').eq('ativo', true).order('nome')
+    if (alvo) q = q.eq('unidade_id', alvo)
+    q.then(({ data, error }) => {
+      if (cancelado || error) return
+      setEmpresas((data as Array<{ id: string; nome: string }>) ?? [])
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [isAdmin, unidadeId, unidadeAtiva])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -61,6 +80,7 @@ export default function NovoLeadModal({
       data_ultima_afericao: ultimaAfericao || null,
       observacoes: observacoes || null,
       origem,
+      empresa_id: empresaId || null,
     }
     // Admin grava a unidade escolhida. Operador não envia: o gatilho preenche com a dele.
     if (isAdmin && unidadeId) registro.unidade_id = unidadeId
@@ -164,6 +184,27 @@ export default function NovoLeadModal({
               className={inputCls}
             />
           </div>
+          {empresas.length > 0 && (
+            <div>
+              <label className={labelCls}>Empresa (contrato)</label>
+              <select
+                value={empresaId}
+                onChange={(e) => setEmpresaId(e.target.value)}
+                className={`${inputCls} bg-card`}
+              >
+                <option value="">Nenhuma — é autônomo</option>
+                {empresas.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nome}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-ink-4 mt-1">
+                Escolhendo uma empresa, este veículo sai da fila de prospecção e passa a entrar na
+                relação mensal dela.
+              </p>
+            </div>
+          )}
           <div>
             <label className={labelCls}>Origem</label>
             <select

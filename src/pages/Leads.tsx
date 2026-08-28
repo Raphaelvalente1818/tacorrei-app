@@ -85,6 +85,23 @@ function normalizaPlaca(s: string): string {
 }
 const PLACA_COMPLETA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/
 
+// Postos do grupo: quem aferiu aqui é cliente da casa. Quem aferiu em outro lugar
+// é cliente de concorrente — e para esse o caminho é LIGAR, não mandar mensagem.
+// Foi a mistura dos dois que restringiu o número da Tacorrei em 28/08.
+function ehCliente(posto: string | null): boolean {
+  if (!posto) return false
+  const p = posto.toUpperCase()
+  return p.includes('TACORREI') || p.includes('LACRE')
+}
+
+const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+// '2026-10' → 'out/26'
+function rotuloMes(mes: string): string {
+  const [a, m] = mes.split('-')
+  return `${MESES_PT[Number(m) - 1] ?? m}/${a.slice(2)}`
+}
+
 export default function Leads() {
   const { membro } = useAuth()
   const filtroUnidade = useFiltroUnidade()
@@ -97,6 +114,11 @@ export default function Leads() {
   // o botão do navegador) devolve a lista exatamente como estava.
   const [params, setParams] = useSearchParams()
   const [filtro, setFiltro] = useState<FiltroLead>((params.get('f') as FiltroLead) || 'todos')
+  // Mês de vencimento: a operadora trabalha um lote com sentido ("os que vencem em
+  // outubro") em vez de "a página 7", que não quer dizer nada. Também dá para
+  // dividir o mês entre as duas sem uma pisar na outra.
+  const [mes, setMes] = useState<string | null>(params.get('m'))
+  const [meses, setMeses] = useState<Array<{ mes: string; total: number; novos: number }>>([])
   const [busca, setBusca] = useState(params.get('q') ?? '')
   const [buscaDebounced, setBuscaDebounced] = useState(params.get('q') ?? '')
   const [page, setPage] = useState(Math.max(0, Number(params.get('p') ?? 1) - 1))
@@ -104,7 +126,9 @@ export default function Leads() {
   const [showNovo, setShowNovo] = useState(false)
   const [irPara, setIrPara] = useState('')
   // Achado da busca por placa exata (fora da janela) — ver comentário em normalizaPlaca.
-  const [foraDaJanela, setForaDaJanela] = useState<Caminhoneiro | null>(null)
+  const [foraDaJanela, setForaDaJanela] = useState<
+    (Caminhoneiro & { empresa_nome?: string | null; empresa_contato?: string | null }) | null
+  >(null)
   const [placaAferir, setPlacaAferir] = useState<string | null>(null)
   const [placaAferida, setPlacaAferida] = useState(false)
   // Cota de WhatsApp do dia — a operadora precisa ver quanto sobrou ANTES de
@@ -139,7 +163,7 @@ export default function Leads() {
       return
     }
     setPage(0)
-  }, [filtro, buscaDebounced, filtroUnidade])
+  }, [filtro, buscaDebounced, filtroUnidade, mes])
 
   // espelha o estado da lista na URL
   useEffect(() => {
@@ -147,8 +171,9 @@ export default function Leads() {
     if (page > 0) novo.set('p', String(page + 1))
     if (filtro !== 'todos') novo.set('f', filtro)
     if (buscaDebounced) novo.set('q', buscaDebounced)
+    if (mes) novo.set('m', mes)
     setParams(novo, { replace: true })
-  }, [page, filtro, buscaDebounced, setParams])
+  }, [page, filtro, buscaDebounced, mes, setParams])
 
   // `aindaVale` permite descartar uma resposta que chegou atrasada, depois que o
   // filtro/unidade já mudou (senão a lista antiga sobrescreve a nova — ver Dashboard).
@@ -163,6 +188,7 @@ export default function Leads() {
       p_filtro: filtro,
       p_busca: buscaDebounced.trim() || null,
       p_unidade: filtroUnidade,
+      p_mes: mes,
     })
 
     if (!aindaVale()) return
@@ -176,7 +202,19 @@ export default function Leads() {
     setLeads(res?.leads ?? [])
     setTotal(Number(res?.total ?? 0))
     setLoading(false)
-  }, [page, filtro, buscaDebounced, filtroUnidade])
+  }, [page, filtro, buscaDebounced, filtroUnidade, mes])
+
+  // Meses disponíveis, com a contagem de cada um — a chip já diz onde está o trabalho.
+  useEffect(() => {
+    let cancelado = false
+    supabase.rpc('meses_de_vencimento', { p_unidade: filtroUnidade }).then(({ data, error }) => {
+      if (cancelado || error || !data) return
+      setMeses(data as Array<{ mes: string; total: number; novos: number }>)
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [filtroUnidade])
 
   useEffect(() => {
     let cancelado = false
@@ -223,7 +261,7 @@ export default function Leads() {
     let cancelado = false
     supabase.rpc('buscar_por_placa', { p_placa: placa }).then(({ data, error }) => {
       if (cancelado || error || !data) return
-      setForaDaJanela(data as Caminhoneiro)
+      setForaDaJanela(data as Caminhoneiro & { empresa_nome?: string | null })
     })
     return () => {
       cancelado = true
@@ -261,6 +299,40 @@ export default function Leads() {
           <Plus size={16} /> Novo lead
         </button>
       </div>
+
+      {/* Vencimento por mês. Substitui "qual página eu estava?" por "estou fazendo
+          outubro" — lote com significado, fácil de dividir entre as duas e fácil de
+          retomar no dia seguinte. O número na chip é quanto ainda está como Novo. */}
+      {meses.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-ink-4 mr-1">
+            Vence em
+          </span>
+          <button
+            onClick={() => setMes(null)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              mes === null ? 'bg-brand text-white border-brand' : 'bg-card text-ink-6 border-line hover:bg-white/5'
+            }`}
+          >
+            Todos
+          </button>
+          {meses.map((m) => (
+            <button
+              key={m.mes}
+              onClick={() => setMes(m.mes === mes ? null : m.mes)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                mes === m.mes ? 'bg-brand text-white border-brand' : 'bg-card text-ink-6 border-line hover:bg-white/5'
+              }`}
+              title={`${m.total} leads, ${m.novos} ainda sem contato`}
+            >
+              {rotuloMes(m.mes)}
+              <span className={`ml-1.5 tabular-nums ${mes === m.mes ? 'text-white/80' : 'text-ink-4'}`}>
+                {m.novos}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="relative">
@@ -317,9 +389,11 @@ export default function Leads() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
-                Fora da fila, mas está na sua base
+                {foraDaJanela.empresa_nome ? 'Veículo de contrato' : 'Fora da fila, mas está na sua base'}
               </p>
-              <p className="text-sm font-bold text-ink">{foraDaJanela.nome}</p>
+              <p className="text-sm font-bold text-ink">
+                {foraDaJanela.empresa_nome ?? foraDaJanela.nome}
+              </p>
               <p className="text-sm text-ink-6">
                 {foraDaJanela.placa_veiculo}
                 {foraDaJanela.cidade ? ` · ${foraDaJanela.cidade}` : ''}
@@ -329,8 +403,9 @@ export default function Leads() {
                 })()}
               </p>
               <p className="text-xs text-ink-4 mt-1">
-                Não aparece na lista porque o vencimento ainda está longe. Se ele veio aferir agora,
-                registre por aqui — não crie um lead novo, senão a placa fica duplicada.
+                {foraDaJanela.empresa_nome
+                  ? 'Este caminhão pertence a uma empresa com contrato — o motorista pode ser qualquer um. Registre a aferição por aqui que o vencimento dela já se atualiza sozinho na próxima relação mensal.'
+                  : 'Não aparece na lista porque o vencimento ainda está longe. Se ele veio aferir agora, registre por aqui — não crie um lead novo, senão a placa fica duplicada.'}
               </p>
             </div>
             {placaAferida ? (
@@ -361,6 +436,7 @@ export default function Leads() {
                 <th className="px-5 py-3">Nome</th>
                 <th className="px-5 py-3">Telefone</th>
                 <th className="px-5 py-3">Cidade/UF</th>
+                <th className="px-5 py-3">Relação</th>
                 <th className="px-5 py-3">Vencimento aferição</th>
                 <th className="px-5 py-3">Status</th>
               </tr>
@@ -394,6 +470,25 @@ export default function Leads() {
                     <td className="px-5 py-3 text-ink-6">{lead.telefone}</td>
                     <td className="px-5 py-3 text-ink-6">
                       {lead.cidade ? `${lead.cidade}${lead.uf ? '/' + lead.uf : ''}` : '—'}
+                    </td>
+                    {/* Cliente da casa x cliente de concorrente. É o que decide o
+                        canal: cliente recebe mensagem, concorrente se liga. */}
+                    <td className="px-5 py-3">
+                      {ehCliente(lead.posto_afericao) ? (
+                        <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                          Cliente
+                        </span>
+                      ) : lead.autorizou_whatsapp ? (
+                        <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30">
+                          Autorizou
+                        </span>
+                      ) : lead.posto_afericao ? (
+                        <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30" title={lead.posto_afericao}>
+                          Concorrente
+                        </span>
+                      ) : (
+                        <span className="text-ink-4 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       {venc ? (

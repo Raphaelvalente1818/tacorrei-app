@@ -29,6 +29,11 @@ const STATUS_POR_RESULTADO: Record<ResultadoLigacao, StatusLead> = {
   reagendar: 'contatado',
   whatsapp_enviado: 'mensagem_enviada',
   aferido: 'aferido',
+  // Não aparecem na lista de RESULTADOS deste formulário — vêm das RPCs
+  // `registrar_autorizacao` e `atualizar_proprietario`. Precisam existir aqui
+  // só para o mapa cobrir a união inteira (foi o que quebrou o deploy em 19/08).
+  autorizou_whatsapp: 'contatado',
+  atualizacao: 'novo',
 }
 
 export default function RegistrarLigacaoForm({

@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Leads from './pages/Leads'
+import Empresas from './pages/Empresas'
 import LeadDetail from './pages/LeadDetail'
 import Agenda from './pages/Agenda'
 import TrocarSenha from './pages/TrocarSenha'
@@ -29,6 +30,7 @@ function PrivateArea() {
         <Route index element={<Dashboard />} />
         <Route path="leads" element={<Leads />} />
         <Route path="leads/:id" element={<LeadDetail />} />
+        <Route path="empresas" element={<Empresas />} />
         <Route path="agenda" element={<Agenda />} />
         <Route path="admin" element={<Admin />} />
         <Route path="trocar-senha" element={<TrocarSenha />} />

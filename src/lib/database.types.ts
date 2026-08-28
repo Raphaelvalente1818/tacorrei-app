@@ -22,9 +22,16 @@ export type ResultadoLigacao =
   | 'reagendar'
   | 'whatsapp_enviado'
   | 'aferido'
+  // Colhido na ligação: "pode me mandar no WhatsApp?". É o consentimento que
+  // libera a mensagem para quem é cliente de concorrente.
+  | 'autorizou_whatsapp'
+  // Anotação do próprio app (troca de proprietário), não uma ação da operadora.
+  | 'atualizacao'
 
 // 'presencial' = o cliente veio e o serviço foi feito (botão "Aferido" na ficha).
-export type CanalContato = 'ligacao_ativa' | 'ligacao_passiva' | 'whatsapp' | 'presencial'
+// 'sistema' = o app registrou sozinho.
+export type CanalContato =
+  | 'ligacao_ativa' | 'ligacao_passiva' | 'whatsapp' | 'presencial' | 'sistema'
 
 export type StatusAgendamento = 'agendado' | 'confirmado' | 'realizado' | 'cancelado' | 'nao_compareceu'
 
@@ -48,6 +55,14 @@ export interface Caminhoneiro {
   tem_tacografo: boolean
   whatsapp_invalido: boolean
   unidade_id: string
+  // Onde o veículo fez a ÚLTIMA aferição (coluna W da base do RNTRC).
+  // Separa cliente da casa de cliente de concorrente — e isso decide o canal.
+  posto_afericao: string | null
+  // "Pode me mandar no WhatsApp?" dito na ligação. Sem isso, cliente de
+  // concorrente não recebe mensagem.
+  autorizou_whatsapp: boolean
+  autorizado_em: string | null
+  autorizado_por: string | null
   created_at: string
   updated_at: string
 }

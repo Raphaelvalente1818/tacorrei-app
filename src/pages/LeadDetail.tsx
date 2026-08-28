@@ -47,6 +47,19 @@ function marcaDoLead(lead: Caminhoneiro): MarcaUnidade {
   return MARCA_POR_UNIDADE[lead.unidade_id] ?? MARCA_PADRAO
 }
 
+// Cliente da casa = a última aferição foi num posto do grupo (Tacorrei ou Lacre).
+// Para ele a mensagem é lembrete de fornecedor. Para quem aferiu em concorrente é
+// abordagem fria — e foi ela que restringiu o número da Tacorrei em 28/08.
+function ehClienteDaCasa(lead: Caminhoneiro): boolean {
+  const p = (lead.posto_afericao ?? '').toUpperCase()
+  return p.includes('TACORREI') || p.includes('LACRE')
+}
+
+// Quem pode receber mensagem: cliente da casa, ou quem autorizou na ligação.
+function podeReceberMensagem(lead: Caminhoneiro): boolean {
+  return ehClienteDaCasa(lead) || lead.autorizou_whatsapp
+}
+
 function formatDateBR(iso: string | null): string {
   if (!iso) return '—'
   const [y, m, d] = iso.slice(0, 10).split('-')
@@ -146,6 +159,16 @@ Estou à sua disposição para qualquer dúvida.
 
 Estamos na ${endereco}`
 
+  // Para quem já aferiu conosco, dizer isso muda a natureza da mensagem: deixa de
+  // ser alguém desconhecido que sabe a placa dele e passa a ser o fornecedor dele.
+  const daCasa = ehClienteDaCasa(lead)
+  const relacao = daCasa ? ` Sua última aferição foi conosco, aqui na ${marca}.` : ''
+  // Depois da ligação em que ele autorizou, a mensagem tem de lembrar a conversa —
+  // senão chega como se fosse o primeiro contato.
+  const posLigacao = !daCasa && lead.autorizou_whatsapp
+    ? ' Conforme conversamos agora há pouco por telefone, segue por escrito.'
+    : ''
+
   if (info && info.vencido) {
     const meses = Math.floor((Date.now() - info.venc.getTime()) / (30 * 86400000))
 
@@ -165,7 +188,7 @@ ${rodape}`
 
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}
 
 Venha aferir com a gente e já saia com tudo em dia.
 
@@ -175,7 +198,7 @@ ${rodape}`
   if (info && !info.vencido) {
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}
 
 Venha aferir com a gente antes do prazo e já saia com tudo em dia.
 
@@ -208,6 +231,10 @@ export default function LeadDetail() {
   const [editTelefone, setEditTelefone] = useState(false)
   const [telefoneVal, setTelefoneVal] = useState('')
   const [editAfericao, setEditAfericao] = useState(false)
+  // O veículo é o que persiste; o dono muda. Quando o cara responde "não é mais
+  // meu", a operadora corrige aqui mesmo — e a troca vai para o histórico.
+  const [editDono, setEditDono] = useState(false)
+  const [donoVal, setDonoVal] = useState('')
   const [afericaoVal, setAfericaoVal] = useState('')
 
   // WhatsApp
@@ -251,6 +278,43 @@ export default function LeadDetail() {
     setEditTelefone(false)
   }
 
+  async function salvarProprietario() {
+    if (!lead) return
+    const novo = donoVal.trim()
+    if (!novo || novo === lead.nome) {
+      setEditDono(false)
+      return
+    }
+    const { error } = await supabase.rpc('atualizar_proprietario', {
+      p_lead: lead.id,
+      p_nome: novo,
+      p_telefone: null,
+    })
+    if (error) {
+      setAlerta(error.message)
+      return
+    }
+    setEditDono(false)
+    carregar()
+  }
+
+  // "Pode me mandar no WhatsApp?" — dito na ligação. É o que libera a mensagem
+  // para quem é cliente de concorrente. Ligação atendida não basta; a permissão
+  // precisa ser explícita, e fica gravada com data e autor.
+  async function marcarAutorizacao(autorizou: boolean) {
+    if (!lead) return
+    const { error } = await supabase.rpc('registrar_autorizacao', {
+      p_lead: lead.id,
+      p_autorizou: autorizou,
+      p_notas: null,
+    })
+    if (error) {
+      setAlerta(error.message)
+      return
+    }
+    carregar()
+  }
+
   async function salvarAfericao() {
     if (!lead) return
     const novo = afericaoVal ? afericaoVal.slice(0, 10) : null
@@ -282,6 +346,12 @@ export default function LeadDetail() {
     }
     if (!numeroWhatsapp(lead.telefone)) {
       setAlerta('Este lead não tem um número de celular válido para envio de WhatsApp.')
+      return
+    }
+    if (!podeReceberMensagem(lead)) {
+      setAlerta(
+        'Este caminhão fez a última aferição em outro posto — não temos relação com ele. Ligue primeiro e, se ele autorizar, marque "Autorizou receber mensagem" que o WhatsApp libera.'
+      )
       return
     }
     if (lead.data_ultimo_whatsapp) {
@@ -422,7 +492,63 @@ export default function LeadDetail() {
       <div className="card p-6 mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-xl font-extrabold text-ink mb-1">{lead.nome}</h1>
+            {editDono ? (
+              <div className="flex items-center gap-1 mb-1">
+                <input
+                  autoFocus
+                  value={donoVal}
+                  onChange={(e) => setDonoVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') salvarProprietario()
+                    if (e.key === 'Escape') setEditDono(false)
+                  }}
+                  className="px-2 py-1 border border-line rounded-lg text-lg font-bold w-full max-w-md focus-ring outline-none"
+                />
+                <button onClick={salvarProprietario} className="text-lucro hover:opacity-70" title="Salvar">
+                  <Check size={18} />
+                </button>
+                <button onClick={() => setEditDono(false)} className="text-ink-4 hover:text-ink" title="Cancelar">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <h1 className="text-xl font-extrabold text-ink mb-1 flex items-center gap-2">
+                {lead.nome}
+                <button
+                  onClick={() => {
+                    setDonoVal(lead.nome)
+                    setEditDono(true)
+                  }}
+                  className="text-ink-4 hover:text-brand"
+                  title="Trocar proprietário (o caminhão foi vendido)"
+                >
+                  <Pencil size={14} />
+                </button>
+              </h1>
+            )}
+
+            {/* Relação com a casa. É o que decide o canal: cliente recebe mensagem,
+                cliente de concorrente se liga primeiro. */}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              {ehClienteDaCasa(lead) ? (
+                <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                  Cliente da casa
+                </span>
+              ) : lead.autorizou_whatsapp ? (
+                <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30">
+                  Autorizou receber mensagem
+                </span>
+              ) : lead.posto_afericao ? (
+                <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30">
+                  Cliente de concorrente
+                </span>
+              ) : null}
+              {lead.posto_afericao && (
+                <span className="text-xs text-ink-4">
+                  Última aferição: {lead.posto_afericao}
+                </span>
+              )}
+            </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-6">
               <span className="flex items-center gap-1.5">
@@ -547,10 +673,23 @@ export default function LeadDetail() {
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <Badge className={STATUS_LEAD_CLASSES[lead.status]}>{STATUS_LEAD_LABEL[lead.status]}</Badge>
+              {/* Cliente de concorrente que ainda não autorizou: o botão de mensagem
+                  sai de cena e entra o de autorização. A operadora liga, e só marca
+                  aqui se ele disser que pode mandar. Foi a mensagem sem relação que
+                  derrubou o número em 28/08 — 16 das 20 daquele dia. */}
+              {!podeReceberMensagem(lead) && (
+                <button
+                  onClick={() => marcarAutorizacao(true)}
+                  className="flex items-center gap-1.5 border border-teal-500/30 bg-teal-500/10 text-teal-300 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-teal-500/20 transition-colors"
+                  title="Marque depois de ligar, se ele disser que pode mandar mensagem"
+                >
+                  <Phone size={16} /> Liguei — autorizou mensagem
+                </button>
+              )}
               <button
                 onClick={abrirWhatsapp}
                 className={`flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl transition-colors ${
-                  lead.tem_tacografo === false || lead.whatsapp_invalido
+                  lead.tem_tacografo === false || lead.whatsapp_invalido || !podeReceberMensagem(lead)
                     ? 'border border-line bg-card text-ink-4 hover:bg-white/5'
                     : 'bg-lucro text-white hover:opacity-90'
                 }`}
@@ -559,7 +698,9 @@ export default function LeadDetail() {
                     ? 'Veículo sem tacógrafo — fora do público-alvo'
                     : lead.whatsapp_invalido
                       ? 'Número marcado como sem WhatsApp'
-                      : 'Enviar WhatsApp (mensagem conforme a situação do lead)'
+                      : !podeReceberMensagem(lead)
+                        ? 'Cliente de concorrente: ligue primeiro e marque a autorização'
+                        : 'Enviar WhatsApp (mensagem conforme a situação do lead)'
                 }
               >
                 <MessageCircle size={16} /> Enviar WhatsApp
