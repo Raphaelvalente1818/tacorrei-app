@@ -63,9 +63,59 @@ export interface Caminhoneiro {
   autorizou_whatsapp: boolean
   autorizado_em: string | null
   autorizado_por: string | null
+  // Frota a que o caminhão pertence. Null = autônomo, um dono um caminhão.
+  empresa_id: string | null
   created_at: string
   updated_at: string
 }
+
+// 'contrato'  → fora da fila; o caminho é a relação mensal na aba Empresas.
+// 'prospecto' → frota que ainda afere no concorrente (ou em ninguém). Continua
+//               na fila e é trabalhada — mas como UMA abordagem, não N.
+export type SituacaoEmpresa = 'contrato' | 'prospecto'
+
+export interface Empresa {
+  id: string
+  unidade_id: string
+  cnpj: string | null
+  nome: string
+  contato: string | null
+  telefone: string | null
+  situacao: SituacaoEmpresa
+  ativo: boolean
+  observacoes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Um caminhão da frota, como vem dentro de `obter_lead`.
+export interface VeiculoDaFrota {
+  id: string
+  placa: string | null
+  venc: string | null
+  // Dias até vencer. Negativo = já venceu. É o que decide quem entra na mesma
+  // conversa e quem fica para uma abordagem futura.
+  dias: number | null
+  este: boolean
+}
+
+// A frota vista de dentro da ficha de um caminhão dela.
+export interface EmpresaDoLead {
+  id: string
+  nome: string
+  cnpj: string | null
+  contato: string | null
+  telefone: string | null
+  situacao: SituacaoEmpresa
+  agrupamento_dias: number
+  // "Herda o melhor": se UM caminhão da frota já aferiu conosco, a pessoa que
+  // atende o telefone nos conhece. O opt-in é dela, não da placa.
+  ja_e_cliente: boolean
+  veiculos: VeiculoDaFrota[]
+}
+
+// O que `obter_lead` devolve: o caminhão e, quando ele é de frota, a frota junto.
+export type LeadComEmpresa = Caminhoneiro & { empresa?: EmpresaDoLead | null }
 
 export interface Ligacao {
   id: string

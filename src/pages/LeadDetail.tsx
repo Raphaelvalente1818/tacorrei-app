@@ -2,11 +2,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MapPin, Truck, CalendarPlus, FileText, History, Pencil, Check, X,
-  MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2,
+  MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2, Building2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
-import type { Agendamento, Caminhoneiro, Ligacao } from '../lib/database.types'
+import type {
+  Agendamento, Ligacao, LeadComEmpresa, VeiculoDaFrota,
+} from '../lib/database.types'
 import {
   CANAL_CONTATO_LABEL,
   RESULTADO_LIGACAO_LABEL,
@@ -43,21 +45,42 @@ const MARCA_POR_UNIDADE: Record<string, MarcaUnidade> = {
   },
 }
 
-function marcaDoLead(lead: Caminhoneiro): MarcaUnidade {
+function marcaDoLead(lead: LeadComEmpresa): MarcaUnidade {
   return MARCA_POR_UNIDADE[lead.unidade_id] ?? MARCA_PADRAO
 }
 
 // Cliente da casa = a última aferição foi num posto do grupo (Tacorrei ou Lacre).
 // Para ele a mensagem é lembrete de fornecedor. Para quem aferiu em concorrente é
 // abordagem fria — e foi ela que restringiu o número da Tacorrei em 28/08.
-function ehClienteDaCasa(lead: Caminhoneiro): boolean {
+//
+// Numa FROTA a conta é outra: basta UM caminhão ter aferido conosco. Quem atende
+// o telefone é a mesma pessoa para os sete caminhões — ela esteve na oficina,
+// deu o número, sabe quem somos. O opt-in é da pessoa, não da placa. Falar do
+// segundo caminhão dela não é abordagem fria, é crescer uma conta que já é nossa.
+function ehClienteDaCasa(lead: LeadComEmpresa): boolean {
+  if (lead.empresa) return lead.empresa.ja_e_cliente
   const p = (lead.posto_afericao ?? '').toUpperCase()
   return p.includes('TACORREI') || p.includes('LACRE')
 }
 
 // Quem pode receber mensagem: cliente da casa, ou quem autorizou na ligação.
-function podeReceberMensagem(lead: Caminhoneiro): boolean {
+function podeReceberMensagem(lead: LeadComEmpresa): boolean {
   return ehClienteDaCasa(lead) || lead.autorizou_whatsapp
+}
+
+// O telefone do lead vem do RNTRC, e lá está o número de QUEM DIRIGE aquele
+// caminhão — que muda a cada viagem. Numa frota, quem decide mandar o caminhão
+// para a aferição é o contato da empresa. Medi na base: as frotas têm telefone
+// diferente em cada veículo, então usar o do lead seria falar com o motorista
+// da vez em vez de com quem resolve.
+function telefoneDestino(lead: LeadComEmpresa): string {
+  const daEmpresa = lead.empresa?.telefone?.trim()
+  return daEmpresa ? daEmpresa : lead.telefone
+}
+
+// A quem a saudação se dirige: o contato da frota, ou o próprio dono.
+function nomeDestino(lead: LeadComEmpresa): string | null {
+  return lead.empresa?.contato?.trim() || lead.nome
 }
 
 function formatDateBR(iso: string | null): string {
@@ -136,13 +159,31 @@ function saudacao(): string {
   return 'Boa noite'
 }
 
+// Os caminhões que entram na mesma conversa, escritos como lista. Só aparece
+// quando ela marcou algum irmão — frota de um caminhão só não ganha bloco extra.
+function blocoDaFrota(irmaos: VeiculoDaFrota[]): string {
+  if (irmaos.length === 0) return ''
+  const linhas = irmaos
+    .map((v) => `• ${v.placa ?? 'sem placa'} — ${(v.dias ?? 0) < 0 ? 'vencido desde' : 'vence em'} ${formatDateBR(v.venc)}`)
+    .join('\n')
+  const plural = irmaos.length > 1
+  return `
+
+E já aproveitando, ${plural ? 'estes também estão para vencer' : 'este também está para vencer'}:
+${linhas}
+
+Se preferir, dá para trazer ${plural ? 'todos de uma vez' : 'os dois juntos'} — eu deixo as guias prontas e vocês resolvem numa viagem só.`
+}
+
 function montarMensagem(
-  lead: Caminhoneiro,
+  lead: LeadComEmpresa,
   info: { venc: Date; vencido: boolean } | null,
-  atendente?: string | null
+  atendente?: string | null,
+  irmaos: VeiculoDaFrota[] = []
 ): string {
   const { marca, endereco } = marcaDoLead(lead)
-  const nome = primeiroNome(lead.nome)
+  const frota = lead.empresa
+  const nome = primeiroNome(nomeDestino(lead))
   const abre = nome ? `${saudacao()}, ${nome}!` : `${saudacao()}!`
 
   // Cabeçalho: saudação, quem assina e o credenciamento — nesta ordem, sempre.
@@ -154,7 +195,14 @@ Posto de ensaio credenciado pelo Inmetro`
   const doVeiculo = lead.placa_veiculo ? `da placa ${lead.placa_veiculo}` : 'do seu veículo'
   const oVeiculo = lead.placa_veiculo ? `a placa ${lead.placa_veiculo}` : 'o seu veículo'
 
-  const rodape = `Se esse veículo não for mais seu, me avisa que eu retiro do cadastro.
+  const extras = blocoDaFrota(irmaos)
+
+  // A porta de saída muda de número quando a conversa cobre vários caminhões.
+  const saida = frota
+    ? `Se algum desses veículos não for mais de vocês, me avisa que eu retiro do cadastro.`
+    : `Se esse veículo não for mais seu, me avisa que eu retiro do cadastro.`
+
+  const rodape = `${saida}
 Estou à sua disposição para qualquer dúvida.
 
 Estamos na ${endereco}`
@@ -162,7 +210,11 @@ Estamos na ${endereco}`
   // Para quem já aferiu conosco, dizer isso muda a natureza da mensagem: deixa de
   // ser alguém desconhecido que sabe a placa dele e passa a ser o fornecedor dele.
   const daCasa = ehClienteDaCasa(lead)
-  const relacao = daCasa ? ` Sua última aferição foi conosco, aqui na ${marca}.` : ''
+  const relacao = daCasa
+    ? frota
+      ? ` Vocês já aferem com a gente aqui na ${marca}.`
+      : ` Sua última aferição foi conosco, aqui na ${marca}.`
+    : ''
   // Depois da ligação em que ele autorizou, a mensagem tem de lembrar a conversa —
   // senão chega como se fosse o primeiro contato.
   const posLigacao = !daCasa && lead.autorizou_whatsapp
@@ -186,23 +238,23 @@ Se ainda usa, eu te explico como funciona.
 ${rodape}`
     }
 
+    // Com o bloco da frota o convite já vem lá dentro ("trazer todos de uma
+    // vez"); repetir "venha aferir" aqui soaria insistente.
+    const convite = extras ? '' : 'Venha aferir com a gente e já saia com tudo em dia.\n\n'
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
 
-Venha aferir com a gente e já saia com tudo em dia.
-
-${rodape}`
+${convite}${rodape}`
   }
 
   if (info && !info.vencido) {
+    const convite = extras ? '' : 'Venha aferir com a gente antes do prazo e já saia com tudo em dia.\n\n'
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}
+Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
 
-Venha aferir com a gente antes do prazo e já saia com tudo em dia.
-
-${rodape}`
+${convite}${rodape}`
   }
 
   // Sem data de aferição = sem tacógrafo. Esses leads não aparecem para a operadora;
@@ -220,7 +272,7 @@ export default function LeadDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { membro } = useAuth()
-  const [lead, setLead] = useState<Caminhoneiro | null>(null)
+  const [lead, setLead] = useState<LeadComEmpresa | null>(null)
   const [ligacoes, setLigacoes] = useState<Ligacao[]>([])
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [loading, setLoading] = useState(true)
@@ -241,6 +293,12 @@ export default function LeadDetail() {
   const [showWhats, setShowWhats] = useState(false)
   const [whatsMsg, setWhatsMsg] = useState('')
   const [alerta, setAlerta] = useState<string | null>(null)
+  // Numa frota, a conversa é uma só e cobre vários caminhões. Aqui ficam os
+  // irmãos que ela marcou — eles entram no texto e são registrados junto, para
+  // não voltarem à fila e gerarem uma segunda mensagem para a mesma pessoa.
+  const [incluidos, setIncluidos] = useState<string[]>([])
+  // Se ela mexeu no texto, o app para de reescrever por cima.
+  const [msgEditada, setMsgEditada] = useState(false)
 
   const carregar = useCallback(async () => {
     if (!id) return
@@ -259,7 +317,7 @@ export default function LeadDetail() {
         .eq('caminhoneiro_id', id)
         .order('data_hora', { ascending: false }),
     ])
-    setLead((leadRes.data as Caminhoneiro | null) ?? null)
+    setLead((leadRes.data as LeadComEmpresa | null) ?? null)
     setLigacoes((ligacoesRes.data as Ligacao[]) ?? [])
     setAgendamentos((agendamentosRes.data as Agendamento[]) ?? [])
     setLoading(false)
@@ -330,6 +388,12 @@ export default function LeadDetail() {
     setEditAfericao(false)
   }
 
+  // Os outros caminhões da frota (o atual fica de fora — ele é o assunto).
+  const irmaosDaFrota = useCallback(
+    (l: LeadComEmpresa): VeiculoDaFrota[] => (l.empresa?.veiculos ?? []).filter((v) => !v.este),
+    []
+  )
+
   // Abre o preview do WhatsApp. A mensagem é escolhida conforme a situação do lead.
   function abrirWhatsapp() {
     if (!lead) return
@@ -344,13 +408,27 @@ export default function LeadDetail() {
       setAlerta('Este número está marcado como SEM WhatsApp. Se foi engano, clique em "É WhatsApp" para desmarcar.')
       return
     }
-    if (!numeroWhatsapp(lead.telefone)) {
-      setAlerta('Este lead não tem um número de celular válido para envio de WhatsApp.')
+    // Empresa com contrato não recebe mensagem avulsa: ela já é nossa, e o
+    // combinado é a relação mensal com todos os vencimentos de uma vez.
+    if (lead.empresa?.situacao === 'contrato') {
+      setAlerta(
+        `Este caminhão é da ${lead.empresa.nome}, que tem contrato. O caminho é a relação mensal na aba Empresas, não mensagem avulsa.`
+      )
+      return
+    }
+    if (!numeroWhatsapp(telefoneDestino(lead))) {
+      setAlerta(
+        lead.empresa
+          ? `A ${lead.empresa.nome} está sem telefone de contato no cadastro, e o número do caminhão também não serve. Preencha o contato da empresa na aba Empresas.`
+          : 'Este lead não tem um número de celular válido para envio de WhatsApp.'
+      )
       return
     }
     if (!podeReceberMensagem(lead)) {
       setAlerta(
-        'Este caminhão fez a última aferição em outro posto — não temos relação com ele. Ligue primeiro e, se ele autorizar, marque "Autorizou receber mensagem" que o WhatsApp libera.'
+        lead.empresa
+          ? `Nenhum caminhão da ${lead.empresa.nome} aferiu conosco ainda — é frota do concorrente. Ligue para o contato e, se ele autorizar, marque "Autorizou receber mensagem".`
+          : 'Este caminhão fez a última aferição em outro posto — não temos relação com ele. Ligue primeiro e, se ele autorizar, marque "Autorizou receber mensagem" que o WhatsApp libera.'
       )
       return
     }
@@ -358,9 +436,33 @@ export default function LeadDetail() {
       setAlerta('Este lead já recebeu uma mensagem. A regra é uma por cliente — insistir é o que mais gera bloqueio. Ele volta a ser abordável depois da próxima aferição.')
       return
     }
-    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao), membro?.nome))
+
+    // Pré-marca os irmãos que vencem dentro da janela de agrupamento. Os que
+    // vencem depois ficam desmarcados: citar caminhão que só vence daqui a oito
+    // meses transforma um lembrete útil em mala direta.
+    const irmaos = irmaosDaFrota(lead)
+    const janela = lead.empresa?.agrupamento_dias ?? 60
+    const pre = irmaos.filter((v) => v.dias !== null && v.dias <= janela).map((v) => v.id)
+    setIncluidos(pre)
+    setMsgEditada(false)
+    setWhatsMsg(
+      montarMensagem(
+        lead,
+        vencimentoLead(lead.data_ultima_afericao),
+        membro?.nome,
+        irmaos.filter((v) => pre.includes(v.id))
+      )
+    )
     setShowWhats(true)
   }
+
+  // Marcar ou desmarcar um caminhão reescreve o texto — a não ser que ela já
+  // tenha editado à mão, caso em que sobrescrever seria apagar o trabalho dela.
+  useEffect(() => {
+    if (!showWhats || !lead || msgEditada) return
+    const irmaos = irmaosDaFrota(lead).filter((v) => incluidos.includes(v.id))
+    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao), membro?.nome, irmaos))
+  }, [incluidos, showWhats, lead, msgEditada, membro?.nome, irmaosDaFrota])
 
   // Abre o WhatsApp Web com a mensagem e registra o envio.
   //
@@ -372,12 +474,16 @@ export default function LeadDetail() {
   // link para a operadora clicar.
   async function enviarWhatsapp() {
     if (!lead) return
-    const num = numeroWhatsapp(lead.telefone)
+    const num = numeroWhatsapp(telefoneDestino(lead))
     if (!num) return
 
     const { data, error } = await supabase.rpc('registrar_envio_whatsapp', {
       p_lead: lead.id,
       p_mensagem: whatsMsg,
+      // Os irmãos cobertos por esta conversa. O banco registra cada um e tira
+      // todos da fila juntos — senão a mesma pessoa receberia outra mensagem
+      // semana que vem, sobre um caminhão que ela já viu neste texto.
+      p_leads: incluidos.length > 0 ? incluidos : null,
     })
 
     if (error) {
@@ -391,8 +497,12 @@ export default function LeadDetail() {
       setAlerta('O navegador bloqueou a abertura do WhatsApp. O envio já foi registrado — abra a conversa manualmente.')
     }
 
-    const cota = data as { restantes: number; limite: number } | null
-    if (cota && cota.restantes <= 5) {
+    const cota = data as { restantes: number; limite: number; extras: number } | null
+    if (cota && cota.extras > 0) {
+      setAlerta(
+        `Registrado. Além deste, mais ${cota.extras} caminhão(ões) da frota saíram da fila — estão cobertos por esta conversa.`
+      )
+    } else if (cota && cota.restantes <= 5) {
       setAlerta(
         cota.restantes === 0
           ? `Cota do dia encerrada (${cota.limite} mensagens). Voltam amanhã.`
@@ -562,6 +672,49 @@ export default function LeadDetail() {
                 </span>
               )}
             </div>
+
+            {/* Frota. Sem isto a operadora não teria como saber que existe irmão
+                vencendo, e a trava "uma abordagem por empresa" pareceria capricho
+                do sistema em vez de proteção do número. */}
+            {lead.empresa && (
+              <div
+                className={`rounded-xl border p-3 mb-3 ${
+                  lead.empresa.situacao === 'contrato'
+                    ? 'border-sky-500/30 bg-sky-500/10'
+                    : 'border-line bg-white/5'
+                }`}
+              >
+                <p className="text-sm font-bold text-ink flex items-center gap-2">
+                  <Building2 size={15} className="text-lucro" />
+                  {lead.empresa.nome}
+                  <span
+                    className={`badge ${
+                      lead.empresa.situacao === 'contrato'
+                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    }`}
+                  >
+                    {lead.empresa.situacao === 'contrato' ? 'Com contrato' : 'A conquistar'}
+                  </span>
+                </p>
+                <p className="text-xs text-ink-4 mt-1">
+                  {lead.empresa.veiculos.length} caminhã
+                  {lead.empresa.veiculos.length === 1 ? 'o' : 'es'} na frota
+                  {lead.empresa.contato && ` · falar com ${lead.empresa.contato}`}
+                  {lead.empresa.telefone && ` · ${lead.empresa.telefone}`}
+                </p>
+                {lead.empresa.situacao === 'contrato' ? (
+                  <p className="text-xs text-sky-200/80 mt-1.5">
+                    Tem contrato: o caminho é a relação mensal na aba Empresas, não mensagem avulsa.
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-4 mt-1.5">
+                    A mensagem vai para o contato da empresa e cobre os caminhões que vencem junto —
+                    uma conversa, não uma por placa.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-6">
               <span className="flex items-center gap-1.5">
@@ -851,9 +1004,63 @@ export default function LeadDetail() {
               Confira/edite a mensagem. Ao enviar, o WhatsApp Web abre já com o texto — é só apertar
               enviar lá. O envio fica registrado aqui automaticamente.
             </p>
+
+            {lead.empresa && (
+              <p className="text-xs text-ink-6 mb-3 rounded-lg border border-line px-3 py-2">
+                Vai para <b className="text-ink">{lead.empresa.contato ?? 'o contato'}</b>
+                {lead.empresa.telefone && <> · {lead.empresa.telefone}</>} — contato da{' '}
+                {lead.empresa.nome}, não o telefone do caminhão.
+              </p>
+            )}
+
+            {/* Os caminhões que entram nesta conversa. Marcados = citados no texto
+                E registrados como abordados, para não gerarem uma segunda mensagem
+                para a mesma pessoa daqui a duas semanas. */}
+            {lead.empresa && irmaosDaFrota(lead).length > 0 && (
+              <div className="rounded-xl border border-line p-3 mb-3">
+                <p className="text-xs font-bold text-ink-6 mb-2">
+                  Outros caminhões da {lead.empresa.nome} — marque os que entram nesta conversa
+                </p>
+                <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                  {irmaosDaFrota(lead).map((v) => {
+                    const dias = v.dias ?? 0
+                    const dentro = dias <= (lead.empresa?.agrupamento_dias ?? 60)
+                    return (
+                      <label key={v.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={incluidos.includes(v.id)}
+                          onChange={(e) => {
+                            setMsgEditada(false)
+                            setIncluidos((prev) =>
+                              e.target.checked ? [...prev, v.id] : prev.filter((x) => x !== v.id)
+                            )
+                          }}
+                          className="accent-lucro"
+                        />
+                        <span className="font-mono font-bold text-ink">{v.placa ?? 'sem placa'}</span>
+                        <span className={dias < 0 ? 'text-rose-300' : dentro ? 'text-ink-6' : 'text-ink-4'}>
+                          {dias < 0
+                            ? `vencido desde ${formatDateBR(v.venc)}`
+                            : `vence em ${formatDateBR(v.venc)}`}
+                        </span>
+                        {!dentro && <span className="text-ink-4">· ainda longe</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-ink-4 mt-2">
+                  Quem ficar de fora não é citado e continua na fila para uma abordagem própria.
+                </p>
+              </div>
+            )}
+
             <textarea
               value={whatsMsg}
-              onChange={(e) => setWhatsMsg(e.target.value)}
+              onChange={(e) => {
+                setWhatsMsg(e.target.value)
+                setMsgEditada(true)
+              }}
               rows={9}
               className="w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none resize-none"
             />

@@ -9,6 +9,13 @@ import Badge from '../components/Badge'
 import NovoLeadModal from '../components/NovoLeadModal'
 import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
 
+// A fila devolve, junto do lead, a frota a que ele pertence — para o selo
+// "Frota" aparecer sem precisar de uma consulta por linha.
+type LeadNaFila = Caminhoneiro & {
+  empresa_nome?: string | null
+  empresa_situacao?: 'contrato' | 'prospecto' | null
+}
+
 type FiltroLead = StatusLead | 'todos' | 'sem_tacografo'
 
 const FILTROS: Array<{ label: string; value: FiltroLead }> = [
@@ -108,7 +115,7 @@ export default function Leads() {
   const isAdmin = membro?.papel === 'admin'
   // A fila "Sem tacógrafo" é só para o admin; a funcionária não vê esse público.
   const filtros = FILTROS.filter((f) => f.value !== 'sem_tacografo' || isAdmin)
-  const [leads, setLeads] = useState<Caminhoneiro[]>([])
+  const [leads, setLeads] = useState<LeadNaFila[]>([])
   const [loading, setLoading] = useState(true)
   // Filtro, busca e página moram na URL: voltar da ficha (ou dar refresh, ou usar
   // o botão do navegador) devolve a lista exatamente como estava.
@@ -198,7 +205,7 @@ export default function Leads() {
       setLoading(false)
       return
     }
-    const res = data as { total: number; leads: Caminhoneiro[] } | null
+    const res = data as { total: number; leads: LeadNaFila[] } | null
     setLeads(res?.leads ?? [])
     setTotal(Number(res?.total ?? 0))
     setLoading(false)
@@ -513,21 +520,34 @@ export default function Leads() {
                     {/* Cliente da casa x cliente de concorrente. É o que decide o
                         canal: cliente recebe mensagem, concorrente se liga. */}
                     <td className="px-5 py-3">
-                      {ehCliente(lead.posto_afericao) ? (
-                        <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
-                          Cliente
-                        </span>
-                      ) : lead.autorizou_whatsapp ? (
-                        <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30">
-                          Autorizou
-                        </span>
-                      ) : lead.posto_afericao ? (
-                        <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30" title={lead.posto_afericao}>
-                          Concorrente
-                        </span>
-                      ) : (
-                        <span className="text-ink-4 text-xs">—</span>
-                      )}
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {ehCliente(lead.posto_afericao) ? (
+                          <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                            Cliente
+                          </span>
+                        ) : lead.autorizou_whatsapp ? (
+                          <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30">
+                            Autorizou
+                          </span>
+                        ) : lead.posto_afericao ? (
+                          <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30" title={lead.posto_afericao}>
+                            Concorrente
+                          </span>
+                        ) : (
+                          <span className="text-ink-4 text-xs">—</span>
+                        )}
+                        {/* Saber que é frota ANTES de abrir a ficha muda o que ela
+                            faz: uma conversa cobre a empresa inteira, e mandar uma
+                            mensagem por placa é o que derruba o número. */}
+                        {lead.empresa_nome && (
+                          <span
+                            className="badge bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            title={lead.empresa_nome}
+                          >
+                            Frota
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-5 py-3">
                       {venc ? (

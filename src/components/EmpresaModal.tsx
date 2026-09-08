@@ -16,6 +16,7 @@ export type EmpresaEditavel = {
   cnpj: string | null
   contato: string | null
   telefone: string | null
+  situacao?: 'contrato' | 'prospecto'
   observacoes?: string | null
   unidade_id?: string
 }
@@ -42,6 +43,7 @@ export default function EmpresaModal({
   const [cnpj, setCnpj] = useState(empresa?.cnpj ?? '')
   const [contato, setContato] = useState(empresa?.contato ?? '')
   const [telefone, setTelefone] = useState(empresa?.telefone ?? '')
+  const [situacao, setSituacao] = useState<'contrato' | 'prospecto'>(empresa?.situacao ?? 'contrato')
   const [observacoes, setObservacoes] = useState(empresa?.observacoes ?? '')
   const [unidadeId, setUnidadeId] = useState(empresa?.unidade_id ?? unidadeAtiva ?? '')
   const [saving, setSaving] = useState(false)
@@ -61,6 +63,7 @@ export default function EmpresaModal({
       cnpj: cnpj.trim() || null,
       contato: contato.trim() || null,
       telefone: telefone.trim() || null,
+      situacao,
       observacoes: observacoes.trim() || null,
     }
     if (isAdmin && unidadeId) registro.unidade_id = unidadeId
@@ -119,6 +122,41 @@ export default function EmpresaModal({
           <div>
             <label className={labelCls}>Razão social / nome *</label>
             <input required value={nome} onChange={(e) => setNome(e.target.value)} className={inputCls} />
+          </div>
+
+          {/* A escolha mais consequente desta tela. "Com contrato" tira os
+              caminhões da fila — se for marcado por engano numa frota do
+              concorrente, ela some e ninguém nunca liga para ela. */}
+          <div>
+            <label className={labelCls}>Relação com a casa *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                {
+                  v: 'contrato' as const,
+                  t: 'Já é cliente, com contrato',
+                  d: 'Sai da fila. Recebe a relação mensal dos vencimentos.',
+                },
+                {
+                  v: 'prospecto' as const,
+                  t: 'A conquistar',
+                  d: 'Fica na fila. Ligar, autorizar e mandar uma mensagem por frota.',
+                },
+              ]).map((o) => (
+                <button
+                  key={o.v}
+                  type="button"
+                  onClick={() => setSituacao(o.v)}
+                  className={`text-left rounded-xl border p-3 transition-colors ${
+                    situacao === o.v
+                      ? 'border-brand bg-brand/10'
+                      : 'border-line hover:bg-white/5'
+                  }`}
+                >
+                  <span className="block text-sm font-bold text-ink">{o.t}</span>
+                  <span className="block text-xs text-ink-4 mt-0.5">{o.d}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

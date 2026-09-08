@@ -26,9 +26,12 @@ type EmpresaPainel = {
   contato: string | null
   telefone: string | null
   unidade_id: string
+  situacao: 'contrato' | 'prospecto'
   veiculos: number
   vencendo: number
+  vencidos: number
   avisada_em: string | null
+  ultima_abordagem: string | null
 }
 
 type Veiculo = { id: string; placa: string | null; modelo: string | null; vence: string }
@@ -296,11 +299,19 @@ export default function Empresas() {
                   <td className="px-5 py-3">
                     <span className="font-semibold text-ink inline-flex items-center gap-1.5">
                       {e.nome}
+                      {/* O selo precisa estar aqui: é ele que diz se os caminhões
+                          desta empresa estão na fila ou fora dela. */}
+                      {e.situacao === 'prospecto' && (
+                        <span className="badge bg-amber-500/15 text-amber-300 border-amber-500/30">
+                          A conquistar
+                        </span>
+                      )}
                       <button
                         onClick={() =>
                           setEditando({
                             id: e.id, nome: e.nome, cnpj: e.cnpj,
-                            contato: e.contato, telefone: e.telefone, unidade_id: e.unidade_id,
+                            contato: e.contato, telefone: e.telefone,
+                            situacao: e.situacao, unidade_id: e.unidade_id,
                           })
                         }
                         className="text-ink-4 hover:text-brand"
@@ -330,7 +341,16 @@ export default function Empresas() {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    {e.avisada_em ? (
+                    {/* Empresa a conquistar não recebe relação mensal: ela ainda
+                        não é cliente, e mandar a lista dos vencimentos dela seria
+                        estranho. O caminho é a fila de leads, caminhão a caminhão. */}
+                    {e.situacao === 'prospecto' ? (
+                      <span className="text-xs text-ink-4">
+                        {e.ultima_abordagem
+                          ? `abordada em ${new Date(e.ultima_abordagem).toLocaleDateString('pt-BR')}`
+                          : 'trabalhar em Leads & Ligações'}
+                      </span>
+                    ) : e.avisada_em ? (
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
                         <CheckCircle2 size={14} />
                         Avisada em {new Date(e.avisada_em).toLocaleDateString('pt-BR')}
