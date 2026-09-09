@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, Building2, Users, Plus, Check, Pencil, Trash2, MapPin } from 'lucide-react'
+import { BarChart3, Building2, Users, Plus, Check, Pencil, Trash2, MapPin, Target } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import MetaDoMes from '../components/MetaDoMes'
 
 type Periodo = { label: string; dias: number | null }
 const PERIODOS: Periodo[] = [
@@ -41,7 +42,7 @@ interface Membro {
   unidade_id: string | null
 }
 
-type Aba = 'producao' | 'unidades' | 'cobertura' | 'acessos'
+type Aba = 'producao' | 'meta' | 'unidades' | 'cobertura' | 'acessos'
 
 const PAPEL_LABEL: Record<Membro['papel'], string> = {
   admin: 'Admin',
@@ -73,6 +74,8 @@ export default function Admin() {
   // (comparação por totais) e Acessos (a equipe dele).
   const abas: { id: Aba; label: string; icon: typeof BarChart3 }[] = [
     { id: 'producao', label: 'Produção', icon: BarChart3 },
+    // A Meta é por unidade: o admin da unidade vê a dele, o admin geral escolhe.
+    { id: 'meta', label: 'Meta', icon: Target },
     { id: 'unidades', label: 'Unidades', icon: Building2 },
     ...(isAdmin ? [{ id: 'cobertura' as Aba, label: 'Cobertura', icon: MapPin }] : []),
     { id: 'acessos', label: 'Acessos', icon: Users },
@@ -98,6 +101,7 @@ export default function Admin() {
       </div>
 
       {aba === 'producao' && <Producao />}
+      {aba === 'meta' && <MetaDoMes />}
       {aba === 'unidades' && <Unidades podeEditar={isAdmin} />}
       {aba === 'cobertura' && isAdmin && <Cobertura />}
       {aba === 'acessos' && <Acessos podeTudo={isAdmin} />}
