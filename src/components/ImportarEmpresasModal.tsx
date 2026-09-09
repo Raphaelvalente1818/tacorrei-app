@@ -20,6 +20,8 @@ type Resultado = {
   criados: number
   movidos: number
   ignorados: number
+  sem_data: number
+  nunca_consultados: number
 }
 
 type Linha = {
@@ -27,9 +29,15 @@ type Linha = {
   empresa: string
   contato: string
   telefone: string
+  email: string
   placa: string
   data: string | null
   modelo: string
+  // Onde o veículo aferiu pela última vez. É este campo que separa cliente de
+  // concorrente e decide o canal — mensagem para um, ligação para o outro.
+  posto: string
+  // Número interno do veículo na frota do cliente.
+  numero: string
   observacoes: string
 }
 
@@ -37,12 +45,15 @@ type Linha = {
 // cada sistema exporta com um rótulo diferente e ninguém vai renomear coluna.
 const SINONIMOS: Record<keyof Linha, string[]> = {
   cnpj: ['CNPJ', 'CPFCNPJ', 'DOCUMENTO'],
-  empresa: ['EMPRESA', 'NOME', 'RAZAOSOCIAL', 'RAZAO', 'CLIENTE'],
+  empresa: ['RAZAOSOCIAL', 'EMPRESA', 'NOME', 'RAZAO', 'CLIENTE'],
   contato: ['CONTATO', 'RESPONSAVEL', 'FALARCOM'],
-  telefone: ['TELEFONE', 'CELULAR', 'FONE', 'WHATSAPP'],
+  telefone: ['CELULAR', 'TELEFONE', 'FONE', 'WHATSAPP'],
+  email: ['EMAIL', 'ELETRONICO'],
   placa: ['PLACA', 'PLACA1', 'PLACAVEICULO'],
-  data: ['DATAAFERICAO', 'DATA', 'ULTIMAAFERICAO', 'AFERICAO'],
-  modelo: ['MODELO', 'TIPO', 'TIPO1', 'VEICULO'],
+  data: ['DATAAFERICAO', 'ULTIMAAFERICAO', 'AFERICAO', 'DATA'],
+  modelo: ['TIPOVEICULO', 'MODELO', 'TIPO', 'TIPO1', 'VEICULO'],
+  posto: ['POSTOAFERICAO', 'POSTO'],
+  numero: ['NVEICULO', 'NUMEROVEICULO', 'FROTA', 'NUMEROINTERNO'],
   observacoes: ['OBSERVACOES', 'OBS', 'OBSERVACAO'],
 }
 
@@ -79,7 +90,6 @@ function parsePlanilha(texto: string): { linhas: Linha[]; faltando: string[] } {
   if (indice.empresa < 0 && indice.cnpj < 0) faltando.push('EMPRESA ou CNPJ')
   if (indice.placa < 0) faltando.push('PLACA')
   if (indice.data < 0) faltando.push('DATA_AFERICAO')
-  if (indice.telefone < 0) faltando.push('TELEFONE')
   if (faltando.length) return { linhas: [], faltando }
 
   const pega = (cols: string[], i: number) => (i >= 0 ? (cols[i] ?? '').trim() : '')
@@ -91,9 +101,12 @@ function parsePlanilha(texto: string): { linhas: Linha[]; faltando: string[] } {
       empresa: pega(cols, indice.empresa),
       contato: pega(cols, indice.contato),
       telefone: pega(cols, indice.telefone),
+      email: pega(cols, indice.email),
       placa: pega(cols, indice.placa),
       data: parseData(pega(cols, indice.data)),
       modelo: pega(cols, indice.modelo),
+      posto: pega(cols, indice.posto),
+      numero: pega(cols, indice.numero),
       observacoes: pega(cols, indice.observacoes),
     }
   })
@@ -112,6 +125,9 @@ export default function ImportarEmpresasModal({
   const filtroUnidade = useFiltroUnidade()
   const isAdmin = membro?.papel === 'admin'
   const [texto, setTexto] = useState('')
+  // A escolha mais consequente desta tela. 'contrato' TIRA os caminhões da fila;
+  // numa base de frotas a prospectar isso as esconderia de quem deve trabalhá-las.
+  const [situacao, setSituacao] = useState<'contrato' | 'prospecto'>('prospecto')
   const [salvando, setSalvando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<Resultado | null>(null)
@@ -129,6 +145,7 @@ export default function ImportarEmpresasModal({
     const { data, error: err } = await supabase.rpc('importar_base_empresas', {
       p_linhas: linhas,
       p_unidade: isAdmin ? filtroUnidade : null,
+      p_situacao: situacao,
     })
     setSalvando(false)
     if (err) {
@@ -145,7 +162,7 @@ export default function ImportarEmpresasModal({
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-base font-extrabold text-ink flex items-center gap-2">
             <Upload size={18} className="text-lucro" />
-            Importar base de contratos
+            Importar base de empresas
           </h2>
           <button onClick={onClose} className="text-ink-4 hover:text-ink">
             <X size={18} />
@@ -153,7 +170,8 @@ export default function ImportarEmpresasModal({
         </div>
         <p className="text-xs text-ink-4 mb-4">
           Abra a planilha, selecione tudo <b>com a linha de cabeçalho</b> e cole aqui. As colunas
-          podem estar em qualquer ordem. Os veículos entram na <b>sua unidade</b>.
+          podem estar em qualquer ordem. Os veículos entram na <b>sua unidade</b>. Base grande pode
+          ser colada em blocos — placa que já entrou não duplica.
         </p>
 
         {resultado ? (
@@ -177,6 +195,21 @@ export default function ImportarEmpresasModal({
                   <b>{resultado.movidos}</b> mudaram de empresa
                 </p>
               )}
+              {resultado.movidos === 0 && resultado.criados > 0 && (
+                <p className="text-ink-4">nenhum veículo mudou de empresa</p>
+              )}
+              {resultado.sem_data > 0 && (
+                <p className="text-amber-300">
+                  <b>{resultado.sem_data}</b> sem data de aferição — ficam fora da fila, mas
+                  aparecem na busca por placa
+                  {resultado.nunca_consultados > 0 && (
+                    <span className="block text-xs text-amber-200/80 mt-0.5">
+                      destes, {resultado.nunca_consultados} parecem nunca ter sido consultados no
+                      INMETRO: podem ter tacógrafo, é estoque a verificar
+                    </span>
+                  )}
+                </p>
+              )}
               {resultado.ignorados > 0 && (
                 <p className="text-ink-4">{resultado.ignorados} linhas ignoradas (sem empresa)</p>
               )}
@@ -190,6 +223,44 @@ export default function ImportarEmpresasModal({
           </div>
         ) : (
           <>
+            {/* Decide se os caminhões desta base ficam NA FILA ou saem dela.
+                Errar aqui numa base de prospecção esconde tudo o que se queria
+                trabalhar — por isso o padrão é 'a conquistar', não 'contrato'. */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1.5">
+                O que é esta base? *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  {
+                    v: 'prospecto' as const,
+                    t: 'Frotas a trabalhar',
+                    d: 'Os caminhões ficam na fila e são trabalhados placa a placa.',
+                  },
+                  {
+                    v: 'contrato' as const,
+                    t: 'Clientes com contrato',
+                    d: 'Saem da fila. Recebem a relação mensal dos vencimentos.',
+                  },
+                ]).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setSituacao(o.v)}
+                    className={`text-left rounded-xl border p-3 transition-colors ${
+                      situacao === o.v ? 'border-brand bg-brand/10' : 'border-line hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-ink">{o.t}</span>
+                    <span className="block text-xs text-ink-4 mt-0.5">{o.d}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-ink-4 mt-1.5">
+                Empresa que já existe <b>não</b> tem a situação alterada por importação.
+              </p>
+            </div>
+
             <textarea
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
