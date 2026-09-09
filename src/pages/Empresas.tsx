@@ -104,6 +104,14 @@ function fmtDia(iso: string): string {
   return `${d}/${m}/${a}`
 }
 
+// "Em risco" é caminhão nosso prestes a vencer numa empresa que NÃO tem contrato —
+// é o que pode vazar para o concorrente. Na frota com contrato o caminhão vencendo
+// é o aviso mensal, que já tem coluna própria; contar como risco jogava as 4
+// empresas com contrato para o topo da fila e inflava o total do cabeçalho.
+function riscoReal(e: EmpresaPainel): number {
+  return e.classe === 'contrato' ? 0 : Number(e.risco ?? 0)
+}
+
 function diasDesde(iso: string | null): number | null {
   if (!iso) return null
   const ms = Date.now() - new Date(iso).getTime()
@@ -265,8 +273,8 @@ export default function Empresas() {
       ordenada.sort((a, b) => Number(b.vencendo) - Number(a.vencendo) || a.nome.localeCompare(b.nome))
     } else {
       ordenada.sort((a, b) => {
-        const pa = Number(a.janela) + Number(a.risco) * 2
-        const pb = Number(b.janela) + Number(b.risco) * 2
+        const pa = Number(a.janela) + riscoReal(a) * 2
+        const pb = Number(b.janela) + riscoReal(b) * 2
         if (pa !== pb) return pb - pa
         const da = diasDesde(a.ultima_abordagem)
         const db = diasDesde(b.ultima_abordagem)
@@ -286,7 +294,7 @@ export default function Empresas() {
       veiculos: visiveis.reduce((s, e) => s + Number(e.veiculos ?? 0), 0),
       vencendo: visiveis.reduce((s, e) => s + Number(e.vencendo ?? 0), 0),
       janela: visiveis.reduce((s, e) => s + Number(e.janela ?? 0), 0),
-      risco: visiveis.reduce((s, e) => s + Number(e.risco ?? 0), 0),
+      risco: visiveis.reduce((s, e) => s + riscoReal(e), 0),
       // "A avisar" é só de quem tem contrato. Empresa a conquistar não recebe
       // relação mensal — contá-la aqui faria a operadora procurar um botão que
       // não existe para ela.
@@ -511,7 +519,7 @@ export default function Empresas() {
                         <span className={Number(e.janela) > 0 ? 'font-extrabold text-amber-400' : 'text-ink-4'}>
                           {e.janela}
                         </span>
-                        {Number(e.risco) > 0 && (
+                        {riscoReal(e) > 0 && (
                           <span className="block text-xs text-rose-400" title="Caminhões nossos vencendo — risco de vazar para o concorrente">
                             {e.risco} em risco
                           </span>
