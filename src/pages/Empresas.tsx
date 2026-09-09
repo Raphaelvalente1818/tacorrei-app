@@ -7,6 +7,7 @@ import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import EmpresaModal, { type EmpresaEditavel } from '../components/EmpresaModal'
 import VeiculosEmpresaModal from '../components/VeiculosEmpresaModal'
 import ImportarEmpresasModal from '../components/ImportarEmpresasModal'
+import FrotaModal from '../components/FrotaModal'
 
 // ── Empresas (frotas) ────────────────────────────────────────────────────────
 // A tela abriga DUAS naturezas, e é `situacao` que as separa:
@@ -138,6 +139,8 @@ export default function Empresas() {
   // null = fechado · objeto vazio = cadastrando · objeto com id = editando
   const [editando, setEditando] = useState<EmpresaEditavel | null>(null)
   const [gerindoVeiculos, setGerindoVeiculos] = useState<{ id: string; nome: string } | null>(null)
+  // Ver a frota é outra coisa que cadastrar placas: consulta, não entrada.
+  const [vendoFrota, setVendoFrota] = useState<{ id: string; nome: string } | null>(null)
   const [importando, setImportando] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -393,14 +396,26 @@ export default function Empresas() {
                     {e.contato ?? '—'}
                     {e.telefone && <span className="block text-xs text-ink-4">{e.telefone}</span>}
                   </td>
+                  {/* O número abre a FROTA (ver e anotar placa a placa). O "+"
+                      ao lado é que abre a colagem — antes o número abria a
+                      colagem, o que servia para cadastrar e não para consultar. */}
                   <td className="px-5 py-3 text-right tabular-nums">
-                    <button
-                      onClick={() => setGerindoVeiculos({ id: e.id, nome: e.nome })}
-                      className="text-ink-6 hover:text-brand hover:underline"
-                      title="Adicionar ou vincular placas desta empresa"
-                    >
-                      {e.veiculos}
-                    </button>
+                    <span className="inline-flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setVendoFrota({ id: e.id, nome: e.nome })}
+                        className="text-ink-6 hover:text-brand hover:underline font-bold"
+                        title="Ver a frota, com vencimento e observação de cada placa"
+                      >
+                        {e.veiculos}
+                      </button>
+                      <button
+                        onClick={() => setGerindoVeiculos({ id: e.id, nome: e.nome })}
+                        className="text-ink-4 hover:text-brand"
+                        title="Adicionar ou vincular placas nesta empresa"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </span>
                   </td>
                   <td className="px-5 py-3 text-right tabular-nums">
                     <span className={Number(e.vencendo) > 0 ? 'font-extrabold text-lucro' : 'text-ink-4'}>
@@ -459,6 +474,16 @@ export default function Empresas() {
           empresaNome={gerindoVeiculos.nome}
           onClose={() => setGerindoVeiculos(null)}
           onSaved={carregar}
+        />
+      )}
+
+      {vendoFrota && (
+        <FrotaModal
+          empresaId={vendoFrota.id}
+          empresaNome={vendoFrota.nome}
+          onClose={() => setVendoFrota(null)}
+          // Dar baixa muda "vencendo no mês" e "a avisar" na tela de trás.
+          onMudou={carregar}
         />
       )}
 
