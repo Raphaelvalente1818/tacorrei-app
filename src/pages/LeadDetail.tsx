@@ -317,9 +317,27 @@ export default function LeadDetail() {
         .eq('caminhoneiro_id', id)
         .order('data_hora', { ascending: false }),
     ])
-    setLead((leadRes.data as LeadComEmpresa | null) ?? null)
-    setLigacoes((ligacoesRes.data as Ligacao[]) ?? [])
+    const leadCarregado = (leadRes.data as LeadComEmpresa | null) ?? null
+    setLead(leadCarregado)
     setAgendamentos((agendamentosRes.data as Agendamento[]) ?? [])
+
+    // Numa frota, a conversa que conta pode ter sido com o gestor, registrada na
+    // empresa e não nesta placa. Sem trazê-la para cá, a operadora abre a ficha,
+    // não vê nada e liga de novo para quem a colega falou ontem.
+    const doCaminhao = (ligacoesRes.data as Ligacao[]) ?? []
+    const empresaId = leadCarregado?.empresa?.id
+    if (empresaId) {
+      const { data: daEmpresa } = await supabase
+        .from('ligacoes')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .order('created_at', { ascending: false })
+      const todas = [...doCaminhao, ...((daEmpresa as Ligacao[]) ?? [])]
+      todas.sort((a, b) => b.created_at.localeCompare(a.created_at))
+      setLigacoes(todas)
+    } else {
+      setLigacoes(doCaminhao)
+    }
     setLoading(false)
   }, [id])
 
@@ -939,6 +957,14 @@ export default function LeadDetail() {
                         {l.resultado !== 'whatsapp_enviado' && (
                           <span className="text-xs text-ink-6">· {RESULTADO_LIGACAO_LABEL[l.resultado]}</span>
                         )}
+                        {l.empresa_id && (
+                          <span
+                            className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                            title="Contato com o gestor da frota — vale para todos os caminhões desta empresa"
+                          >
+                            com a empresa
+                          </span>
+                        )}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="text-xs text-ink-4">
@@ -947,13 +973,17 @@ export default function LeadDetail() {
                             timeStyle: 'short',
                           })}
                         </span>
-                        <button
-                          onClick={() => deletarContato(l)}
-                          className="text-ink-4 hover:text-rose-400"
-                          title="Excluir este registro de contato"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {/* O contato de frota não se apaga daqui: ele não é desta
+                            placa, é da empresa inteira. */}
+                        {!l.empresa_id && (
+                          <button
+                            onClick={() => deletarContato(l)}
+                            className="text-ink-4 hover:text-rose-400"
+                            title="Excluir este registro de contato"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </span>
                     </div>
                     {l.notas && <p className="text-sm text-ink-6 whitespace-pre-line">{l.notas}</p>}

@@ -119,7 +119,11 @@ export type LeadComEmpresa = Caminhoneiro & { empresa?: EmpresaDoLead | null }
 
 export interface Ligacao {
   id: string
-  caminhoneiro_id: string
+  // Uma das duas está preenchida (o banco garante isso na `ligacoes_alvo_ck`):
+  // contato de caminhão tem `caminhoneiro_id`; contato com o gestor de uma frota
+  // tem `empresa_id` e vale para todas as placas dela.
+  caminhoneiro_id: string | null
+  empresa_id: string | null
   operador_id: string | null
   resultado: ResultadoLigacao
   canal: CanalContato

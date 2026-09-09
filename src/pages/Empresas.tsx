@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Building2, ChevronLeft, ChevronRight, CheckCircle2, MessageCircle, Pencil, Plus, Truck, Upload, X,
+  Building2, ChevronLeft, ChevronRight, CheckCircle2, MessageCircle, Pencil, Phone, Plus, Truck,
+  Upload, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import EmpresaModal, { type EmpresaEditavel } from '../components/EmpresaModal'
 import VeiculosEmpresaModal from '../components/VeiculosEmpresaModal'
 import ImportarEmpresasModal from '../components/ImportarEmpresasModal'
+import ContatoEmpresaModal from '../components/ContatoEmpresaModal'
 import FrotaModal from '../components/FrotaModal'
 
 // ── Empresas (frotas) ────────────────────────────────────────────────────────
@@ -15,14 +17,19 @@ import FrotaModal from '../components/FrotaModal'
 //   contrato  → o oposto do lead. Não se prospecta: já é cliente, já manda os
 //               carros. O trabalho é AVISAR quais veículos vencem no mês
 //               seguinte. Sem funil, sem taxa de conversão, sem "abordar".
-//   prospecto → frota que ainda afere no concorrente. Os caminhões CONTINUAM na
-//               fila de Leads & Ligações e são trabalhados lá — aqui ela só
-//               existe para agrupar as placas sob um contato só.
+//   prospecto → frota que ainda afere no concorrente. Os caminhões continuam
+//               na fila de Leads & Ligações, mas a conversa que resolve é com
+//               o gestor da frota — e é aqui que ela é registrada.
 //
-// A conta que justifica esta tela: São Bernardo tem ~80 empresas, de 10 a 300
-// veículos. Com validade de 2 anos, algo como 125 veículos vencem por mês — mais
-// do que a operação de prospecção inteira produziu em um mês. E custa 80
-// mensagens mensais, não 30 por dia.
+// Dentro de `prospecto` a `classe` (vinda do banco) diz onde gastar o dia:
+//
+//   mista     → já temos pelo menos um caminhão desta empresa. É o pé na
+//               porta: a operadora liga citando um caminhão que já vem aqui.
+//   virgem    → tem posto conhecido, nenhum nosso.
+//   sem_dados → nenhum veículo com posto de aferição. Provavelmente não tem
+//               tacógrafo; não é fila, é ruído. Fica escondida por padrão.
+
+type ClasseEmpresa = 'contrato' | 'mista' | 'virgem' | 'sem_dados'
 
 type EmpresaPainel = {
   id: string
@@ -32,9 +39,14 @@ type EmpresaPainel = {
   telefone: string | null
   unidade_id: string
   situacao: 'contrato' | 'prospecto'
+  classe: ClasseEmpresa
   veiculos: number
+  nossos: number
+  a_conquistar: number
   vencendo: number
   vencidos: number
+  janela: number
+  risco: number
   avisada_em: string | null
   ultima_abordagem: string | null
 }
@@ -59,6 +71,25 @@ const MESES_PT = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 ]
 
+const SELO_CLASSE: Record<ClasseEmpresa, { texto: string; classe: string; ajuda: string } | null> = {
+  contrato: null,
+  mista: {
+    texto: 'Pé na porta',
+    classe: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    ajuda: 'Já temos pelo menos um caminhão desta empresa',
+  },
+  virgem: {
+    texto: 'A conquistar',
+    classe: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    ajuda: 'Nenhum caminhão desta empresa afere conosco',
+  },
+  sem_dados: {
+    texto: 'Sem dados',
+    classe: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+    ajuda: 'Nenhum veículo com posto de aferição — provavelmente não tem tacógrafo',
+  },
+}
+
 function primeiroDoMes(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
@@ -71,6 +102,12 @@ function rotuloCompetencia(iso: string): string {
 function fmtDia(iso: string): string {
   const [a, m, d] = iso.slice(0, 10).split('-')
   return `${d}/${m}/${a}`
+}
+
+function diasDesde(iso: string | null): number | null {
+  if (!iso) return null
+  const ms = Date.now() - new Date(iso).getTime()
+  return Math.floor(ms / 86400000)
 }
 
 function numeroWhatsapp(tel: string | null): string | null {
@@ -127,9 +164,9 @@ export default function Empresas() {
     return primeiroDoMes(d)
   })
   const [empresas, setEmpresas] = useState<EmpresaPainel[]>([])
-  // Com 80 empresas, as duas naturezas numa lista só viram bagunça: quem tem
-  // contrato espera aviso mensal, quem é a conquistar espera ligação.
-  const [aba, setAba] = useState<'todas' | 'contrato' | 'prospecto'>('todas')
+  // Com 600 empresas, as naturezas numa lista só viram bagunça: quem tem
+  // contrato espera aviso mensal, quem é mista espera ligação hoje.
+  const [aba, setAba] = useState<'todas' | ClasseEmpresa>('todas')
   const [loading, setLoading] = useState(true)
   const [aberta, setAberta] = useState<EmpresaPainel | null>(null)
   const [veiculos, setVeiculos] = useState<Veiculo[]>([])
@@ -141,6 +178,7 @@ export default function Empresas() {
   const [gerindoVeiculos, setGerindoVeiculos] = useState<{ id: string; nome: string } | null>(null)
   // Ver a frota é outra coisa que cadastrar placas: consulta, não entrada.
   const [vendoFrota, setVendoFrota] = useState<{ id: string; nome: string } | null>(null)
+  const [contatando, setContatando] = useState<EmpresaPainel | null>(null)
   const [importando, setImportando] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -208,17 +246,47 @@ export default function Empresas() {
 
   // A lista mostrada depende do filtro; os totais falam sempre da lista mostrada,
   // senão o número no topo não bate com as linhas embaixo.
-  const visiveis = useMemo(
-    () => (aba === 'todas' ? empresas : empresas.filter((e) => e.situacao === aba)),
-    [empresas, aba]
-  )
+  //
+  // A ordem é a fila de trabalho, e muda com a aba:
+  //   contrato → por vencimento do mês, que é o que dispara o aviso.
+  //   demais   → pela oportunidade da janela de 90 dias (caminhão do concorrente
+  //              prestes a vencer) somada ao que está em risco de vazar, e o
+  //              desempate é a empresa há mais tempo sem contato.
+  // "Sem dados" fica fora de "Todas": são empresas sem nenhum veículo com posto,
+  // que quase certamente não têm tacógrafo. Aparecem só na aba delas.
+  const visiveis = useMemo(() => {
+    const base =
+      aba === 'todas'
+        ? empresas.filter((e) => e.classe !== 'sem_dados')
+        : empresas.filter((e) => e.classe === aba)
+
+    const ordenada = [...base]
+    if (aba === 'contrato') {
+      ordenada.sort((a, b) => Number(b.vencendo) - Number(a.vencendo) || a.nome.localeCompare(b.nome))
+    } else {
+      ordenada.sort((a, b) => {
+        const pa = Number(a.janela) + Number(a.risco) * 2
+        const pb = Number(b.janela) + Number(b.risco) * 2
+        if (pa !== pb) return pb - pa
+        const da = diasDesde(a.ultima_abordagem)
+        const db = diasDesde(b.ultima_abordagem)
+        // Nunca abordada vem antes de qualquer uma já abordada.
+        if (da === null && db !== null) return -1
+        if (db === null && da !== null) return 1
+        if (da !== null && db !== null && da !== db) return db - da
+        return a.nome.localeCompare(b.nome)
+      })
+    }
+    return ordenada
+  }, [empresas, aba])
 
   const totais = useMemo(
     () => ({
       empresas: visiveis.length,
       veiculos: visiveis.reduce((s, e) => s + Number(e.veiculos ?? 0), 0),
       vencendo: visiveis.reduce((s, e) => s + Number(e.vencendo ?? 0), 0),
-      avisadas: visiveis.filter((e) => e.avisada_em).length,
+      janela: visiveis.reduce((s, e) => s + Number(e.janela ?? 0), 0),
+      risco: visiveis.reduce((s, e) => s + Number(e.risco ?? 0), 0),
       // "A avisar" é só de quem tem contrato. Empresa a conquistar não recebe
       // relação mensal — contá-la aqui faria a operadora procurar um botão que
       // não existe para ela.
@@ -231,9 +299,11 @@ export default function Empresas() {
 
   const contagem = useMemo(
     () => ({
-      todas: empresas.length,
-      contrato: empresas.filter((e) => e.situacao === 'contrato').length,
-      prospecto: empresas.filter((e) => e.situacao === 'prospecto').length,
+      todas: empresas.filter((e) => e.classe !== 'sem_dados').length,
+      mista: empresas.filter((e) => e.classe === 'mista').length,
+      virgem: empresas.filter((e) => e.classe === 'virgem').length,
+      contrato: empresas.filter((e) => e.classe === 'contrato').length,
+      sem_dados: empresas.filter((e) => e.classe === 'sem_dados').length,
     }),
     [empresas]
   )
@@ -241,14 +311,11 @@ export default function Empresas() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4">
-        {/* O título dizia "Empresas com contrato" e que ninguém ali é prospectado.
-            Depois que a aba passou a abrigar os dois tipos, esse texto virou o
-            oposto do que a tela faz — e é ele que a operadora lê para decidir. */}
         <div>
           <h1 className="text-xl font-extrabold text-ink">Empresas</h1>
           <p className="text-sm text-ink-4">
-            Frotas <b className="text-ink-6">com contrato</b> recebem o aviso mensal aqui. Frotas{' '}
-            <b className="text-ink-6">a conquistar</b> são trabalhadas em Leads &amp; Ligações.
+            Frotas <b className="text-ink-6">com contrato</b> recebem o aviso mensal. Nas demais, a
+            ligação é com o gestor e vale para a frota inteira.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -291,14 +358,19 @@ export default function Empresas() {
 
         <div className="flex flex-wrap items-center gap-5 text-sm">
           <span className="text-ink-6">
-            <b className="text-ink">{totais.empresas}</b>{' '}
-            {aba === 'prospecto' ? 'a conquistar' : aba === 'contrato' ? 'com contrato' : 'empresas'}
+            <b className="text-ink">{totais.empresas}</b> empresas
           </span>
           <span className="text-ink-6">
             <b className="text-ink">{totais.veiculos}</b> veículos
           </span>
           <span className="text-ink-6">
             <b className="text-lucro">{totais.vencendo}</b> vencendo no mês
+          </span>
+          <span className="text-ink-6" title="Caminhões do concorrente que vencem nos próximos 90 dias">
+            <b className="text-amber-400">{totais.janela}</b> na janela
+          </span>
+          <span className="text-ink-6" title="Caminhões nossos vencendo ou vencidos há pouco — risco de vazar">
+            <b className={totais.risco ? 'text-rose-400' : 'text-ink'}>{totais.risco}</b> em risco
           </span>
           <span className="text-ink-6">
             <b className={totais.pendentes ? 'text-amber-400' : 'text-ink'}>{totais.pendentes}</b> a avisar
@@ -307,17 +379,20 @@ export default function Empresas() {
       </div>
 
       {/* O filtro só aparece quando há empresa cadastrada — numa tela vazia ele
-          seria três botões que não fazem nada. */}
+          seria botões que não fazem nada. */}
       {empresas.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {([
-            { v: 'todas' as const, t: 'Todas', n: contagem.todas },
-            { v: 'contrato' as const, t: 'Com contrato', n: contagem.contrato },
-            { v: 'prospecto' as const, t: 'A conquistar', n: contagem.prospecto },
+            { v: 'todas' as const, t: 'Todas', n: contagem.todas, ajuda: 'Tudo, menos as sem dados' },
+            { v: 'mista' as const, t: 'Pé na porta', n: contagem.mista, ajuda: 'Já temos ao menos um caminhão dessas empresas' },
+            { v: 'virgem' as const, t: 'A conquistar', n: contagem.virgem, ajuda: 'Nenhum caminhão conosco ainda' },
+            { v: 'contrato' as const, t: 'Com contrato', n: contagem.contrato, ajuda: 'Recebem o aviso mensal' },
+            { v: 'sem_dados' as const, t: 'Sem dados', n: contagem.sem_dados, ajuda: 'Nenhum veículo com posto — provavelmente sem tacógrafo' },
           ]).map((f) => (
             <button
               key={f.v}
               onClick={() => setAba(f.v)}
+              title={f.ajuda}
               className={`px-3.5 py-1.5 rounded-xl text-sm font-bold border transition-colors ${
                 aba === f.v
                   ? 'border-brand bg-brand/15 text-ink'
@@ -345,113 +420,148 @@ export default function Empresas() {
         ) : visiveis.length === 0 ? (
           <div className="p-8 text-center">
             <Building2 size={28} className="mx-auto text-ink-4 mb-3" />
-            <p className="text-sm font-bold text-ink mb-1">
-              Nenhuma empresa {aba === 'prospecto' ? 'a conquistar' : 'com contrato'} ainda
-            </p>
+            <p className="text-sm font-bold text-ink mb-1">Nenhuma empresa nesta lista</p>
             <p className="text-xs text-ink-4">
               A relação de uma empresa se muda no lápis, ao lado do nome.
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink-4 text-xs uppercase font-bold border-b border-line">
-                <th className="px-5 py-3">Empresa</th>
-                <th className="px-5 py-3">Contato</th>
-                <th className="px-5 py-3 text-right">Veículos</th>
-                <th className="px-5 py-3 text-right">Vencendo</th>
-                <th className="px-5 py-3">Aviso do mês</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visiveis.map((e) => (
-                <tr key={e.id} className="border-b border-line last:border-0 hover:bg-white/5">
-                  <td className="px-5 py-3">
-                    <span className="font-semibold text-ink inline-flex items-center gap-1.5">
-                      {e.nome}
-                      {/* O selo precisa estar aqui: é ele que diz se os caminhões
-                          desta empresa estão na fila ou fora dela. */}
-                      {e.situacao === 'prospecto' && (
-                        <span className="badge bg-amber-500/15 text-amber-300 border-amber-500/30">
-                          A conquistar
-                        </span>
-                      )}
-                      <button
-                        onClick={() =>
-                          setEditando({
-                            id: e.id, nome: e.nome, cnpj: e.cnpj,
-                            contato: e.contato, telefone: e.telefone,
-                            situacao: e.situacao, unidade_id: e.unidade_id,
-                          })
-                        }
-                        className="text-ink-4 hover:text-brand"
-                        title="Editar cadastro"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    </span>
-                    {e.cnpj && <span className="block text-xs text-ink-4">{e.cnpj}</span>}
-                  </td>
-                  <td className="px-5 py-3 text-ink-6">
-                    {e.contato ?? '—'}
-                    {e.telefone && <span className="block text-xs text-ink-4">{e.telefone}</span>}
-                  </td>
-                  {/* O número abre a FROTA (ver e anotar placa a placa). O "+"
-                      ao lado é que abre a colagem — antes o número abria a
-                      colagem, o que servia para cadastrar e não para consultar. */}
-                  <td className="px-5 py-3 text-right tabular-nums">
-                    <span className="inline-flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setVendoFrota({ id: e.id, nome: e.nome })}
-                        className="text-ink-6 hover:text-brand hover:underline font-bold"
-                        title="Ver a frota, com vencimento e observação de cada placa"
-                      >
-                        {e.veiculos}
-                      </button>
-                      <button
-                        onClick={() => setGerindoVeiculos({ id: e.id, nome: e.nome })}
-                        className="text-ink-4 hover:text-brand"
-                        title="Adicionar ou vincular placas nesta empresa"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right tabular-nums">
-                    <span className={Number(e.vencendo) > 0 ? 'font-extrabold text-lucro' : 'text-ink-4'}>
-                      {e.vencendo}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    {/* Empresa a conquistar não recebe relação mensal: ela ainda
-                        não é cliente, e mandar a lista dos vencimentos dela seria
-                        estranho. O caminho é a fila de leads, caminhão a caminhão. */}
-                    {e.situacao === 'prospecto' ? (
-                      <span className="text-xs text-ink-4">
-                        {e.ultima_abordagem
-                          ? `abordada em ${new Date(e.ultima_abordagem).toLocaleDateString('pt-BR')}`
-                          : 'trabalhar em Leads & Ligações'}
-                      </span>
-                    ) : e.avisada_em ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-                        <CheckCircle2 size={14} />
-                        Avisada em {new Date(e.avisada_em).toLocaleDateString('pt-BR')}
-                      </span>
-                    ) : Number(e.vencendo) > 0 ? (
-                      <button
-                        onClick={() => abrir(e)}
-                        className="inline-flex items-center gap-1.5 bg-lucro text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:opacity-90"
-                      >
-                        <MessageCircle size={14} /> Ver relação
-                      </button>
-                    ) : (
-                      <span className="text-xs text-ink-4">nada a avisar</span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-ink-4 text-xs uppercase font-bold border-b border-line">
+                  <th className="px-5 py-3">Empresa</th>
+                  <th className="px-5 py-3">Contato</th>
+                  <th className="px-5 py-3 text-right">Veículos</th>
+                  <th className="px-5 py-3 text-right">Vencendo</th>
+                  <th className="px-5 py-3 text-right" title="Caminhão do concorrente vencendo em até 90 dias · em risco: caminhão nosso vencendo">
+                    Janela 90d
+                  </th>
+                  <th className="px-5 py-3">Último contato</th>
+                  <th className="px-5 py-3">Ação</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visiveis.map((e) => {
+                  const selo = SELO_CLASSE[e.classe]
+                  const dias = diasDesde(e.ultima_abordagem)
+                  return (
+                    <tr key={e.id} className="border-b border-line last:border-0 hover:bg-white/5">
+                      <td className="px-5 py-3">
+                        <span className="font-semibold text-ink inline-flex items-center gap-1.5">
+                          {e.nome}
+                          {/* O selo diz onde gastar o dia: pé na porta antes de virgem. */}
+                          {selo && (
+                            <span className={`badge ${selo.classe}`} title={selo.ajuda}>
+                              {selo.texto}
+                            </span>
+                          )}
+                          <button
+                            onClick={() =>
+                              setEditando({
+                                id: e.id, nome: e.nome, cnpj: e.cnpj,
+                                contato: e.contato, telefone: e.telefone,
+                                situacao: e.situacao, unidade_id: e.unidade_id,
+                              })
+                            }
+                            className="text-ink-4 hover:text-brand"
+                            title="Editar cadastro"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </span>
+                        {e.cnpj && <span className="block text-xs text-ink-4">{e.cnpj}</span>}
+                      </td>
+                      <td className="px-5 py-3 text-ink-6">
+                        {e.contato ?? '—'}
+                        {e.telefone && <span className="block text-xs text-ink-4">{e.telefone}</span>}
+                      </td>
+                      {/* O número abre a FROTA (ver e anotar placa a placa). O "+"
+                          ao lado é que abre a colagem — antes o número abria a
+                          colagem, o que servia para cadastrar e não para consultar. */}
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        <span className="inline-flex items-center gap-2 justify-end">
+                          <button
+                            onClick={() => setVendoFrota({ id: e.id, nome: e.nome })}
+                            className="text-ink-6 hover:text-brand hover:underline font-bold"
+                            title="Ver a frota, com vencimento e observação de cada placa"
+                          >
+                            {e.veiculos}
+                          </button>
+                          <button
+                            onClick={() => setGerindoVeiculos({ id: e.id, nome: e.nome })}
+                            className="text-ink-4 hover:text-brand"
+                            title="Adicionar ou vincular placas nesta empresa"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </span>
+                        {Number(e.nossos) > 0 && (
+                          <span className="block text-xs text-emerald-400" title="Caminhões que já aferem conosco">
+                            {e.nossos} {Number(e.nossos) === 1 ? 'nosso' : 'nossos'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        <span className={Number(e.vencendo) > 0 ? 'font-extrabold text-lucro' : 'text-ink-4'}>
+                          {e.vencendo}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        <span className={Number(e.janela) > 0 ? 'font-extrabold text-amber-400' : 'text-ink-4'}>
+                          {e.janela}
+                        </span>
+                        {Number(e.risco) > 0 && (
+                          <span className="block text-xs text-rose-400" title="Caminhões nossos vencendo — risco de vazar para o concorrente">
+                            {e.risco} em risco
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs">
+                        {/* Conta ligação e WhatsApp. Antes só olhava WhatsApp, e a
+                            empresa para quem ela tinha ligado três vezes aparecia
+                            como nunca abordada. */}
+                        {dias === null ? (
+                          <span className="text-ink-4">nunca</span>
+                        ) : (
+                          <span className={dias > 60 ? 'text-amber-300' : 'text-ink-6'}>
+                            {dias === 0 ? 'hoje' : dias === 1 ? 'ontem' : `há ${dias} dias`}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {e.classe === 'contrato' ? (
+                          e.avisada_em ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                              <CheckCircle2 size={14} />
+                              Avisada em {new Date(e.avisada_em).toLocaleDateString('pt-BR')}
+                            </span>
+                          ) : Number(e.vencendo) > 0 ? (
+                            <button
+                              onClick={() => abrir(e)}
+                              className="inline-flex items-center gap-1.5 bg-lucro text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:opacity-90"
+                            >
+                              <MessageCircle size={14} /> Ver relação
+                            </button>
+                          ) : (
+                            <span className="text-xs text-ink-4">nada a avisar</span>
+                          )
+                        ) : (
+                          <button
+                            onClick={() => setContatando(e)}
+                            className="inline-flex items-center gap-1.5 border border-line text-ink-6 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-white/5 hover:text-brand"
+                            title="Registrar a ligação com o gestor da frota — vale para as placas em aberto"
+                          >
+                            <Phone size={14} /> Registrar contato
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -464,6 +574,14 @@ export default function Empresas() {
       {importando && (
         <ImportarEmpresasModal
           onClose={() => setImportando(false)}
+          onSaved={carregar}
+        />
+      )}
+
+      {contatando && (
+        <ContatoEmpresaModal
+          empresa={contatando}
+          onClose={() => setContatando(null)}
           onSaved={carregar}
         />
       )}
