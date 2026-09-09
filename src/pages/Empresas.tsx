@@ -8,11 +8,15 @@ import EmpresaModal, { type EmpresaEditavel } from '../components/EmpresaModal'
 import VeiculosEmpresaModal from '../components/VeiculosEmpresaModal'
 import ImportarEmpresasModal from '../components/ImportarEmpresasModal'
 
-// ── Empresas com contrato ────────────────────────────────────────────────────
-// São o oposto do lead. Não se prospecta: já são clientes, já mandam os carros.
-// O trabalho aqui é AVISAR quais veículos vencem no mês seguinte, para a empresa
-// mandar os certos — e é por isso que esta tela não tem funil, nem taxa de
-// conversão, nem botão de "abordar".
+// ── Empresas (frotas) ────────────────────────────────────────────────────────
+// A tela abriga DUAS naturezas, e é `situacao` que as separa:
+//
+//   contrato  → o oposto do lead. Não se prospecta: já é cliente, já manda os
+//               carros. O trabalho é AVISAR quais veículos vencem no mês
+//               seguinte. Sem funil, sem taxa de conversão, sem "abordar".
+//   prospecto → frota que ainda afere no concorrente. Os caminhões CONTINUAM na
+//               fila de Leads & Ligações e são trabalhados lá — aqui ela só
+//               existe para agrupar as placas sob um contato só.
 //
 // A conta que justifica esta tela: São Bernardo tem ~80 empresas, de 10 a 300
 // veículos. Com validade de 2 anos, algo como 125 veículos vencem por mês — mais
@@ -122,6 +126,9 @@ export default function Empresas() {
     return primeiroDoMes(d)
   })
   const [empresas, setEmpresas] = useState<EmpresaPainel[]>([])
+  // Com 80 empresas, as duas naturezas numa lista só viram bagunça: quem tem
+  // contrato espera aviso mensal, quem é a conquistar espera ligação.
+  const [aba, setAba] = useState<'todas' | 'contrato' | 'prospecto'>('todas')
   const [loading, setLoading] = useState(true)
   const [aberta, setAberta] = useState<EmpresaPainel | null>(null)
   const [veiculos, setVeiculos] = useState<Veiculo[]>([])
@@ -196,13 +203,34 @@ export default function Empresas() {
     carregar()
   }
 
+  // A lista mostrada depende do filtro; os totais falam sempre da lista mostrada,
+  // senão o número no topo não bate com as linhas embaixo.
+  const visiveis = useMemo(
+    () => (aba === 'todas' ? empresas : empresas.filter((e) => e.situacao === aba)),
+    [empresas, aba]
+  )
+
   const totais = useMemo(
     () => ({
-      empresas: empresas.length,
-      veiculos: empresas.reduce((s, e) => s + Number(e.veiculos ?? 0), 0),
-      vencendo: empresas.reduce((s, e) => s + Number(e.vencendo ?? 0), 0),
-      avisadas: empresas.filter((e) => e.avisada_em).length,
-      pendentes: empresas.filter((e) => Number(e.vencendo ?? 0) > 0 && !e.avisada_em).length,
+      empresas: visiveis.length,
+      veiculos: visiveis.reduce((s, e) => s + Number(e.veiculos ?? 0), 0),
+      vencendo: visiveis.reduce((s, e) => s + Number(e.vencendo ?? 0), 0),
+      avisadas: visiveis.filter((e) => e.avisada_em).length,
+      // "A avisar" é só de quem tem contrato. Empresa a conquistar não recebe
+      // relação mensal — contá-la aqui faria a operadora procurar um botão que
+      // não existe para ela.
+      pendentes: visiveis.filter(
+        (e) => e.situacao === 'contrato' && Number(e.vencendo ?? 0) > 0 && !e.avisada_em
+      ).length,
+    }),
+    [visiveis]
+  )
+
+  const contagem = useMemo(
+    () => ({
+      todas: empresas.length,
+      contrato: empresas.filter((e) => e.situacao === 'contrato').length,
+      prospecto: empresas.filter((e) => e.situacao === 'prospecto').length,
     }),
     [empresas]
   )
@@ -210,10 +238,14 @@ export default function Empresas() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4">
+        {/* O título dizia "Empresas com contrato" e que ninguém ali é prospectado.
+            Depois que a aba passou a abrigar os dois tipos, esse texto virou o
+            oposto do que a tela faz — e é ele que a operadora lê para decidir. */}
         <div>
-          <h1 className="text-xl font-extrabold text-ink">Empresas com contrato</h1>
+          <h1 className="text-xl font-extrabold text-ink">Empresas</h1>
           <p className="text-sm text-ink-4">
-            Aviso mensal dos veículos a vencer — estes clientes não são prospectados.
+            Frotas <b className="text-ink-6">com contrato</b> recebem o aviso mensal aqui. Frotas{' '}
+            <b className="text-ink-6">a conquistar</b> são trabalhadas em Leads &amp; Ligações.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -256,7 +288,8 @@ export default function Empresas() {
 
         <div className="flex flex-wrap items-center gap-5 text-sm">
           <span className="text-ink-6">
-            <b className="text-ink">{totais.empresas}</b> empresas
+            <b className="text-ink">{totais.empresas}</b>{' '}
+            {aba === 'prospecto' ? 'a conquistar' : aba === 'contrato' ? 'com contrato' : 'empresas'}
           </span>
           <span className="text-ink-6">
             <b className="text-ink">{totais.veiculos}</b> veículos
@@ -270,6 +303,30 @@ export default function Empresas() {
         </div>
       </div>
 
+      {/* O filtro só aparece quando há empresa cadastrada — numa tela vazia ele
+          seria três botões que não fazem nada. */}
+      {empresas.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {([
+            { v: 'todas' as const, t: 'Todas', n: contagem.todas },
+            { v: 'contrato' as const, t: 'Com contrato', n: contagem.contrato },
+            { v: 'prospecto' as const, t: 'A conquistar', n: contagem.prospecto },
+          ]).map((f) => (
+            <button
+              key={f.v}
+              onClick={() => setAba(f.v)}
+              className={`px-3.5 py-1.5 rounded-xl text-sm font-bold border transition-colors ${
+                aba === f.v
+                  ? 'border-brand bg-brand/15 text-ink'
+                  : 'border-line text-ink-6 hover:bg-white/5'
+              }`}
+            >
+              {f.t} <span className="text-ink-4 font-semibold">{f.n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         {loading ? (
           <p className="p-6 text-sm text-ink-4">Carregando…</p>
@@ -280,6 +337,16 @@ export default function Empresas() {
             <p className="text-xs text-ink-4">
               Cadastre uma pelo botão acima, ou importe a base de contratos — cada linha precisa de
               CNPJ, nome, telefone, placa e data da última aferição.
+            </p>
+          </div>
+        ) : visiveis.length === 0 ? (
+          <div className="p-8 text-center">
+            <Building2 size={28} className="mx-auto text-ink-4 mb-3" />
+            <p className="text-sm font-bold text-ink mb-1">
+              Nenhuma empresa {aba === 'prospecto' ? 'a conquistar' : 'com contrato'} ainda
+            </p>
+            <p className="text-xs text-ink-4">
+              A relação de uma empresa se muda no lápis, ao lado do nome.
             </p>
           </div>
         ) : (
@@ -294,7 +361,7 @@ export default function Empresas() {
               </tr>
             </thead>
             <tbody>
-              {empresas.map((e) => (
+              {visiveis.map((e) => (
                 <tr key={e.id} className="border-b border-line last:border-0 hover:bg-white/5">
                   <td className="px-5 py-3">
                     <span className="font-semibold text-ink inline-flex items-center gap-1.5">
