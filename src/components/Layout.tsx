@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Phone, CalendarClock, LogOut, KeyRound, Shield, Building2 } from 'lucide-react'
+import { LayoutDashboard, Phone, CalendarClock, LogOut, KeyRound, Shield, Building2, Trophy } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 const NAV = [
@@ -88,6 +88,14 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+
+          {/* A operadora tem o placar dela; o admin vê o mesmo na aba Meta do Admin. */}
+          {membro?.papel === 'operador' && (
+            <NavLink to="/placar" className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}>
+              <Trophy size={17} strokeWidth={2.2} />
+              Meu placar
+            </NavLink>
+          )}
 
           {vePainelAdmin && (
             <NavLink to="/admin" className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}>

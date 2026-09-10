@@ -101,6 +101,8 @@ type Meta = {
     empresas_pe_na_porta: number
   }
   realizado: Realizado[]
+  // O consolidado da unidade: é tudo que a operadora vê da colega.
+  total_unidade: { afericoes: number; pontos: number; empresas_conquistadas: number; sem_atribuicao: number }
   detalhe: Detalhe[]
   carteira: {
     renovados: number
@@ -165,16 +167,22 @@ function num(n: number | null | undefined): string {
   return Number(n ?? 0).toLocaleString('pt-BR')
 }
 
-export default function MetaDoMes() {
+// modo 'admin'     → aba Meta do Admin: todas as operadoras, auditoria, escolhe a unidade.
+// modo 'operadora' → "Meu placar": só os pontos dela, o total da unidade ao lado,
+//                    sem auditoria. A mesma tela, para os dois lerem o mesmo número.
+export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operadora' }) {
   const { membro, unidades, unidadeAtiva } = useAuth()
   const isAdmin = membro?.papel === 'admin'
+  const souOperadora = modo === 'operadora'
 
   // O admin geral pode estar em "Todas as unidades"; a meta é por unidade,
   // então aqui ele escolhe. O admin de unidade não escolhe nada.
   const [unidadeEscolhida, setUnidadeEscolhida] = useState<string | null>(null)
-  const unidadeId = isAdmin
-    ? (unidadeAtiva ?? unidadeEscolhida ?? unidades[0]?.id ?? null)
-    : (membro?.unidade_id ?? null)
+  const unidadeId = souOperadora
+    ? (membro?.unidade_id ?? null)
+    : isAdmin
+      ? (unidadeAtiva ?? unidadeEscolhida ?? unidades[0]?.id ?? null)
+      : (membro?.unidade_id ?? null)
 
   const [competencia, setCompetencia] = useState(() => primeiroDoMes(new Date()))
   const [meta, setMeta] = useState<Meta | null>(null)
@@ -185,17 +193,16 @@ export default function MetaDoMes() {
     if (!unidadeId) return
     setLoading(true)
     setErro(null)
-    const { data, error } = await supabase.rpc('meta_do_mes', {
-      p_unidade: unidadeId,
-      p_competencia: competencia,
-    })
+    const { data, error } = souOperadora
+      ? await supabase.rpc('placar_operadora', { p_competencia: competencia })
+      : await supabase.rpc('meta_do_mes', { p_unidade: unidadeId, p_competencia: competencia })
     setLoading(false)
     if (error) {
       setErro(error.message)
       return
     }
     setMeta(data as Meta)
-  }, [unidadeId, competencia])
+  }, [unidadeId, competencia, souOperadora])
 
   useEffect(() => {
     carregar()
@@ -251,7 +258,7 @@ export default function MetaDoMes() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-sm">
-          {isAdmin && !unidadeAtiva && unidades.length > 1 && (
+          {!souOperadora && isAdmin && !unidadeAtiva && unidades.length > 1 && (
             <select
               value={unidadeId}
               onChange={(e) => setUnidadeEscolhida(e.target.value)}
@@ -267,7 +274,9 @@ export default function MetaDoMes() {
               <b className="text-ink">{meta.unidade.nome}</b>
             </span>
           )}
-          <span className="badge bg-brand/15 text-brand border-brand/30">Fase 1 · sem meta numérica</span>
+          <span className="badge bg-brand/15 text-brand border-brand/30">
+            {souOperadora ? 'Meu placar · fase 1, sem meta numérica' : 'Fase 1 · sem meta numérica'}
+          </span>
         </div>
       </div>
 
@@ -280,20 +289,37 @@ export default function MetaDoMes() {
       ) : (
         <>
           {/* ── Placar ─────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Cartao rotulo="Pontos no mês" valor={num(totalMes)} cor="text-brand" icone={<Trophy size={16} />} />
-            <Cartao rotulo="Aferições registradas" valor={num(meta.detalhe.length)} />
-            <Cartao
-              rotulo="Empresas conquistadas"
-              valor={num(meta.detalhe.filter((d) => d.empresa_conquistada).length)}
-              cor="text-emerald-400"
-            />
-            <Cartao
-              rotulo="Vieram sozinhos"
-              valor={num(semAtribuicao?.afericoes ?? 0)}
-              ajuda="Aferições sem contato registrado nos dias anteriores. Não pontuam para ninguém."
-            />
-          </div>
+          {souOperadora ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Cartao rotulo="Meus pontos" valor={num(totalMes)} cor="text-brand" icone={<Trophy size={16} />} />
+              <Cartao rotulo="Minhas aferições" valor={num(meta.detalhe.length)} />
+              <Cartao
+                rotulo="Empresas que eu conquistei"
+                valor={num(meta.detalhe.filter((d) => d.empresa_conquistada).length)}
+                cor="text-emerald-400"
+              />
+              <Cartao
+                rotulo="Pontos da unidade"
+                valor={num(meta.total_unidade.pontos)}
+                ajuda={`${num(meta.total_unidade.afericoes)} aferições na unidade, ${num(meta.total_unidade.sem_atribuicao)} sem contato prévio`}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Cartao rotulo="Pontos no mês" valor={num(totalMes)} cor="text-brand" icone={<Trophy size={16} />} />
+              <Cartao rotulo="Aferições registradas" valor={num(meta.detalhe.length)} />
+              <Cartao
+                rotulo="Empresas conquistadas"
+                valor={num(meta.detalhe.filter((d) => d.empresa_conquistada).length)}
+                cor="text-emerald-400"
+              />
+              <Cartao
+                rotulo="Vieram sozinhos"
+                valor={num(semAtribuicao?.afericoes ?? 0)}
+                ajuda="Aferições sem contato registrado nos dias anteriores. Não pontuam para ninguém."
+              />
+            </div>
+          )}
 
           {/* ── Como o ponto é contado ─────────────────────────────────── */}
           <div className="card p-5">
@@ -345,10 +371,12 @@ export default function MetaDoMes() {
           {/* ── Realizado por operadora ────────────────────────────────── */}
           <div className="card overflow-hidden">
             <div className="px-5 pt-5 pb-3">
-              <h2 className="text-sm font-extrabold text-ink">Realizado por operadora</h2>
+              <h2 className="text-sm font-extrabold text-ink">{souOperadora ? 'Meu realizado' : 'Realizado por operadora'}</h2>
             </div>
             {meta.realizado.length === 0 ? (
-              <p className="px-5 pb-5 text-sm text-ink-4">Nenhuma aferição registrada neste mês ainda.</p>
+              <p className="px-5 pb-5 text-sm text-ink-4">
+                {souOperadora ? 'Nenhum ponto seu neste mês ainda.' : 'Nenhuma aferição registrada neste mês ainda.'}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -457,7 +485,7 @@ export default function MetaDoMes() {
           {/* ── Detalhe: a origem de cada ponto ────────────────────────── */}
           <div className="card overflow-hidden">
             <div className="px-5 pt-5 pb-3">
-              <h2 className="text-sm font-extrabold text-ink">A origem de cada ponto</h2>
+              <h2 className="text-sm font-extrabold text-ink">{souOperadora ? 'A origem dos meus pontos' : 'A origem de cada ponto'}</h2>
               <p className="text-xs text-ink-4">O que o caminhão era antes de vir, e o contato que o trouxe.</p>
             </div>
             {meta.detalhe.length === 0 ? (

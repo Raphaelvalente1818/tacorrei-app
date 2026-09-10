@@ -10,6 +10,7 @@ import Agenda from './pages/Agenda'
 import TrocarSenha from './pages/TrocarSenha'
 import RedefinirSenha from './pages/RedefinirSenha'
 import Admin from './pages/Admin'
+import Placar from './pages/Placar'
 
 function PrivateArea() {
   const { session, loading } = useAuth()
@@ -33,6 +34,7 @@ function PrivateArea() {
         <Route path="empresas" element={<Empresas />} />
         <Route path="agenda" element={<Agenda />} />
         <Route path="admin" element={<Admin />} />
+        <Route path="placar" element={<Placar />} />
         <Route path="trocar-senha" element={<TrocarSenha />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
