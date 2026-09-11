@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, ShieldAlert, Target, Trophy } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Lock, ShieldAlert, Target, Trophy, Wallet, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
@@ -81,12 +81,64 @@ type Auditoria = {
   classe: Classe
   total: number
   operadora: string | null
+  marcado_por: string | null
+}
+
+// Parâmetros do prêmio vigentes na competência (parametros_unidade).
+// valor_ponto null = mês de observação: conta ponto, não paga.
+type Premio = {
+  valor_ponto: number | null
+  teto_mes: number | null
+  pct_bolo: number
+  vigencia: string
+  observacao: string | null
+}
+
+type FechamentoOperadora = {
+  id: string
+  operadora_id: string
+  nome: string | null
+  afericoes: number
+  pontos_brutos: number
+  pontos_finais: number
+  anulada: boolean
+  motivo: string | null
+  individual: number | null
+  bolo: number | null
+  total: number | null
+}
+
+type RespostaAuditoria = { ponto_id: string; ok: boolean; obs?: string | null }
+
+// O fechamento, uma vez feito, é a foto do mês: não muda mais.
+type Fechamento = {
+  id: string
+  competencia: string
+  fechado_em: string
+  fechado_por: string | null
+  whatsapp_restrito: boolean
+  observacoes: string | null
+  valor_ponto: number | null
+  teto_mes: number | null
+  pct_bolo: number
+  carteira_pct: number | null
+  carteira_ok: boolean
+  pontos_brutos: number
+  pontos_finais: number
+  total_pago: number | null
+  individual_pago: number | null
+  bolo_pago: number | null
+  observacao_mes: boolean
+  auditoria: RespostaAuditoria[]
+  operadoras: FechamentoOperadora[]
 }
 
 type Meta = {
   competencia: string
-  unidade: { id: string; nome: string; posto: string | null }
+  unidade: { id: string; nome: string; posto: string | null; edita_premio: boolean }
   parametros: Parametros
+  premio: Premio | null
+  fechamento: Fechamento | null
   universo: {
     vencem_no_mes: {
       contrato: number
@@ -167,6 +219,20 @@ function num(n: number | null | undefined): string {
   return Number(n ?? 0).toLocaleString('pt-BR')
 }
 
+function real(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
+  return Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+// Quanto a unidade levaria se o mês fechasse agora com estes pontos:
+// pontos × valor, limitado ao teto. Só uma projeção — a auditoria e a
+// carteira ainda podem mudar o número.
+function projecaoPremio(pontos: number, premio: Premio | null): number | null {
+  if (!premio || premio.valor_ponto === null) return null
+  const bruto = pontos * Number(premio.valor_ponto)
+  return premio.teto_mes === null ? bruto : Math.min(bruto, Number(premio.teto_mes))
+}
+
 // modo 'admin'     → aba Meta do Admin: todas as operadoras, auditoria, escolhe a unidade.
 // modo 'operadora' → "Meu placar": só os pontos dela, o total da unidade ao lado,
 //                    sem auditoria. A mesma tela, para os dois lerem o mesmo número.
@@ -189,6 +255,16 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
+  // Fechamento do mês: quem pode fechar é o admin geral ou o gestor da unidade.
+  // As respostas da auditoria ficam aqui até o botão; o banco só grava tudo junto.
+  const podeFechar = !souOperadora && (isAdmin || membro?.papel === 'admin_unidade')
+  const [respostas, setRespostas] = useState<Record<string, { ok: boolean | null; obs: string }>>({})
+  const [whatsappRestrito, setWhatsappRestrito] = useState(false)
+  const [observacoes, setObservacoes] = useState('')
+  const [confirmando, setConfirmando] = useState(false)
+  const [fechando, setFechando] = useState(false)
+  const [erroFechar, setErroFechar] = useState<string | null>(null)
+
   const carregar = useCallback(async () => {
     if (!unidadeId) return
     setLoading(true)
@@ -207,6 +283,49 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
   useEffect(() => {
     carregar()
   }, [carregar])
+
+  // Trocou de mês ou de unidade: o formulário de fechamento começa do zero.
+  useEffect(() => {
+    setRespostas({})
+    setWhatsappRestrito(false)
+    setObservacoes('')
+    setConfirmando(false)
+    setErroFechar(null)
+  }, [competencia, unidadeId])
+
+  function responder(id: string, ok: boolean) {
+    setRespostas((r) => ({ ...r, [id]: { ok, obs: r[id]?.obs ?? '' } }))
+    setConfirmando(false)
+  }
+
+  function anotar(id: string, obs: string) {
+    setRespostas((r) => ({ ...r, [id]: { ok: r[id]?.ok ?? null, obs } }))
+  }
+
+  async function fecharMes() {
+    if (!meta || !unidadeId) return
+    setFechando(true)
+    setErroFechar(null)
+    const auditoria: RespostaAuditoria[] = meta.auditoria.map((a) => ({
+      ponto_id: a.id,
+      ok: respostas[a.id]?.ok === true,
+      obs: respostas[a.id]?.obs?.trim() || null,
+    }))
+    const { error } = await supabase.rpc('fechar_mes', {
+      p_unidade: unidadeId,
+      p_competencia: competencia,
+      p_auditoria: auditoria,
+      p_whatsapp_restrito: whatsappRestrito,
+      p_observacoes: observacoes.trim() || null,
+    })
+    setFechando(false)
+    setConfirmando(false)
+    if (error) {
+      setErroFechar(error.message)
+      return
+    }
+    await carregar()
+  }
 
   function andarMes(passo: number) {
     const [a, m] = competencia.split('-').map(Number)
@@ -274,9 +393,19 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
               <b className="text-ink">{meta.unidade.nome}</b>
             </span>
           )}
-          <span className="badge bg-brand/15 text-brand border-brand/30">
-            {souOperadora ? 'Meu placar · fase 1, sem meta numérica' : 'Fase 1 · sem meta numérica'}
-          </span>
+          {meta?.fechamento ? (
+            <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30 flex items-center gap-1">
+              <Lock size={12} /> Mês fechado
+            </span>
+          ) : meta?.premio && meta.premio.valor_ponto !== null ? (
+            <span className="badge bg-brand/15 text-brand border-brand/30">
+              {souOperadora ? 'Meu placar · prêmio ativo' : 'Prêmio ativo'}
+            </span>
+          ) : (
+            <span className="badge bg-brand/15 text-brand border-brand/30">
+              {souOperadora ? 'Meu placar · mês de observação' : 'Mês de observação · sem prêmio'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -318,6 +447,141 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
                 valor={num(semAtribuicao?.afericoes ?? 0)}
                 ajuda="Aferições sem contato registrado nos dias anteriores. Não pontuam para ninguém."
               />
+            </div>
+          )}
+
+          {/* ── Prêmio: o que o ponto vale neste mês ───────────────────── */}
+          {!meta.fechamento && (
+            <div className="card p-5">
+              <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
+                <Wallet size={16} className="text-brand" /> Prêmio do mês
+              </h2>
+              {!meta.premio ? (
+                <p className="text-xs text-ink-4">Nenhum parâmetro de prêmio cadastrado para esta unidade neste mês.</p>
+              ) : meta.premio.valor_ponto === null ? (
+                <p className="text-xs text-ink-4">
+                  Mês de observação: os pontos contam e ficam registrados, mas ainda não viram prêmio.
+                  {meta.premio.observacao ? <span className="block mt-1 text-ink-6">{meta.premio.observacao}</span> : null}
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-ink-4 mb-3">
+                    Cada ponto vale <b className="text-ink-6">{real(meta.premio.valor_ponto)}</b>
+                    {meta.premio.teto_mes !== null && <>, até <b className="text-ink-6">{real(meta.premio.teto_mes)}</b> por mês na unidade</>}.
+                    {' '}<b className="text-ink-6">{meta.premio.pct_bolo}%</b> do total vai para o bolo, dividido em partes iguais entre as operadoras
+                    {' '}— só se a carteira defendida ficar acima do piso. O resto é individual, na proporção dos pontos de cada uma.
+                  </p>
+                  <div className="flex flex-wrap gap-6">
+                    <div>
+                      <div className="text-2xl font-extrabold tabular-nums text-brand">
+                        {real(projecaoPremio(Number(meta.total_unidade.pontos), meta.premio))}
+                      </div>
+                      <div className="text-xs text-ink-4">projeção da unidade, com os pontos de hoje</div>
+                    </div>
+                    {souOperadora && Number(meta.total_unidade.pontos) > 0 && (
+                      <div>
+                        <div className="text-2xl font-extrabold tabular-nums text-ink">
+                          {real(
+                            ((projecaoPremio(Number(meta.total_unidade.pontos), meta.premio) ?? 0) * (100 - meta.premio.pct_bolo) / 100)
+                              * totalMes / Number(meta.total_unidade.pontos)
+                          )}
+                        </div>
+                        <div className="text-xs text-ink-4">sua parte individual estimada, sem o bolo</div>
+                      </div>
+                    )}
+                    {meta.premio.teto_mes !== null && Number(meta.total_unidade.pontos) * Number(meta.premio.valor_ponto) > Number(meta.premio.teto_mes) && (
+                      <div className="text-xs text-amber-300 self-end">A unidade já bateu o teto do mês.</div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-ink-4 mt-3">
+                    Projeção, não promessa: a auditoria e a carteira defendida ainda entram na conta no fechamento.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Mês fechado: a foto final ──────────────────────────────── */}
+          {meta.fechamento && (
+            <div className="card p-5 border-emerald-500/30">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-sm font-extrabold text-ink flex items-center gap-2">
+                    <Lock size={16} className="text-emerald-400" /> Mês fechado
+                  </h2>
+                  <p className="text-xs text-ink-4">
+                    Fechado por <b className="text-ink-6">{meta.fechamento.fechado_por ?? '—'}</b> em {fmtDataHora(meta.fechamento.fechado_em)}. Este número não muda mais.
+                  </p>
+                </div>
+                {meta.fechamento.whatsapp_restrito && (
+                  <span className="badge bg-rose-500/15 text-rose-300 border-rose-500/30">WhatsApp restrito · prêmio zerado</span>
+                )}
+                {meta.fechamento.observacao_mes && !meta.fechamento.whatsapp_restrito && (
+                  <span className="badge bg-slate-500/15 text-slate-300 border-slate-500/30">mês de observação · sem prêmio</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
+                <Mini rotulo="Pontos brutos" valor={meta.fechamento.pontos_brutos} />
+                <Mini rotulo="Pontos finais" valor={meta.fechamento.pontos_finais} cor="text-brand" />
+                <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5">
+                  <div className={`text-xl font-extrabold tabular-nums ${meta.fechamento.carteira_ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {meta.fechamento.carteira_pct === null ? '—' : `${meta.fechamento.carteira_pct}%`}
+                  </div>
+                  <div className="text-[11px] text-ink-4 leading-tight">
+                    carteira defendida · {meta.fechamento.carteira_ok ? 'acima do piso' : `abaixo do piso: conquistas ×${String(meta.parametros.fator_carteira).replace('.', ',')}, sem bolo`}
+                  </div>
+                </div>
+                <MiniReal rotulo="Total da unidade" valor={meta.fechamento.total_pago} cor="text-brand" />
+                <MiniReal rotulo="Parte individual" valor={meta.fechamento.individual_pago} />
+                <MiniReal rotulo="Bolo" valor={meta.fechamento.bolo_pago} />
+              </div>
+
+              {meta.fechamento.operadoras.length > 0 && (
+                <div className="overflow-x-auto -mx-5">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-ink-4 text-xs uppercase font-bold border-y border-line">
+                        <th className="px-5 py-2">Operadora</th>
+                        <th className="px-3 py-2 text-right">Aferições</th>
+                        <th className="px-3 py-2 text-right">Brutos</th>
+                        <th className="px-3 py-2 text-right">Finais</th>
+                        <th className="px-3 py-2 text-right">Individual</th>
+                        <th className="px-3 py-2 text-right">Bolo</th>
+                        <th className="px-5 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {meta.fechamento.operadoras.map((o) => (
+                        <tr key={o.id} className={`border-b border-line last:border-0 ${o.anulada ? 'text-ink-4' : ''}`}>
+                          <td className="px-5 py-2.5 font-semibold text-ink">
+                            {o.nome ?? 'Usuário removido'}
+                            {o.anulada && (
+                              <span className="badge bg-rose-500/15 text-rose-300 border-rose-500/30 ml-2" title={o.motivo ?? ''}>anulada</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{num(o.afericoes)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{num(o.pontos_brutos)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{num(o.pontos_finais)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{real(o.individual)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{real(o.bolo)}</td>
+                          <td className={`px-5 py-2.5 text-right tabular-nums font-extrabold ${o.anulada ? '' : 'text-brand'}`}>{real(o.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {meta.fechamento.observacoes && (
+                <p className="text-xs text-ink-6 mt-3 whitespace-pre-line"><b className="text-ink-4">Observações:</b> {meta.fechamento.observacoes}</p>
+              )}
+              {meta.fechamento.valor_ponto !== null && (
+                <p className="text-[11px] text-ink-4 mt-3">
+                  Regra usada: {real(meta.fechamento.valor_ponto)} por ponto
+                  {meta.fechamento.teto_mes !== null ? `, teto ${real(meta.fechamento.teto_mes)}` : ''}, {meta.fechamento.pct_bolo}% no bolo.
+                </p>
+              )}
             </div>
           )}
 
@@ -556,26 +820,154 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
           </div>
 
           {/* ── Auditoria ──────────────────────────────────────────────── */}
-          {meta.auditoria.length > 0 && (
-            <div className="card p-5">
-              <h2 className="text-sm font-extrabold text-ink mb-1">Auditoria do mês</h2>
-              <p className="text-xs text-ink-4 mb-3">
-                {meta.auditoria.length} aferições sorteadas — sempre as mesmas para este mês. Conferir cada uma contra a ordem de serviço do posto. Um registro falso anula o mês inteiro da operadora.
-              </p>
-              <ul className="grid md:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-                {meta.auditoria.map((a, i) => (
-                  <li key={a.id} className="flex items-baseline gap-2 text-ink-6">
-                    <span className="text-ink-4 tabular-nums w-4 shrink-0">{i + 1}.</span>
-                    <span className="font-mono font-bold text-ink">{a.placa ?? '—'}</span>
-                    <span className="truncate">{a.empresa ?? a.dono ?? ''}</span>
-                    <span className="text-ink-4 shrink-0">{fmtDia(a.data_afericao)}</span>
-                    <span className="text-ink-4 shrink-0">{a.operadora ?? 'sem atribuição'}</span>
-                    <span className="text-brand tabular-nums shrink-0">{num(a.total)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {(() => {
+            const emFechamento = podeFechar && c.mes_fechado && !meta.fechamento
+            const respondidas = meta.auditoria.filter((a) => respostas[a.id]?.ok !== null && respostas[a.id]?.ok !== undefined).length
+            const faltam = meta.auditoria.length - respondidas
+            const reprovadas = meta.auditoria.filter((a) => respostas[a.id]?.ok === false)
+            const gravadas = new Map((meta.fechamento?.auditoria ?? []).map((r) => [r.ponto_id, r]))
+
+            if (meta.auditoria.length === 0 && !emFechamento) return null
+
+            return (
+              <div className={`card p-5 ${emFechamento ? 'border-brand/40' : ''}`}>
+                <h2 className="text-sm font-extrabold text-ink mb-1">
+                  {emFechamento ? 'Fechar o mês' : 'Auditoria do mês'}
+                </h2>
+                <p className="text-xs text-ink-4 mb-3">
+                  {meta.auditoria.length} aferições sorteadas — sempre as mesmas para este mês. Conferir cada uma contra a ordem de serviço do posto.
+                  Um registro falso anula o mês inteiro de quem marcou e de quem pontuou.
+                  {emFechamento && ' Responda as ' + meta.auditoria.length + ' e depois feche: a partir daí o número não muda mais.'}
+                </p>
+
+                {meta.auditoria.length === 0 ? (
+                  <p className="text-xs text-ink-4 mb-3">Nenhuma aferição pontuada neste mês — não há o que auditar.</p>
+                ) : (
+                  <ul className="space-y-1.5 text-xs">
+                    {meta.auditoria.map((a, i) => {
+                      const r = respostas[a.id]
+                      const g = gravadas.get(a.id)
+                      return (
+                        <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-6 py-1.5 border-b border-line last:border-0">
+                          <span className="text-ink-4 tabular-nums w-4 shrink-0">{i + 1}.</span>
+                          <span className="font-mono font-bold text-ink">{a.placa ?? '—'}</span>
+                          <span className="truncate max-w-56">{a.empresa ?? a.dono ?? ''}</span>
+                          <span className="text-ink-4 shrink-0">{fmtDia(a.data_afericao)}</span>
+                          <span className="text-ink-4 shrink-0" title="Quem pontuou · quem marcou como aferido">
+                            {a.operadora ?? 'sem atribuição'}{a.marcado_por ? ` · marcou: ${a.marcado_por}` : ''}
+                          </span>
+                          <span className="text-brand tabular-nums shrink-0">{num(a.total)}</span>
+
+                          {emFechamento && (
+                            <span className="ml-auto flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => responder(a.id, true)}
+                                className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 ${r?.ok === true ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'border-line text-ink-6 hover:bg-white/5'}`}
+                              >
+                                <Check size={12} /> Confere
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => responder(a.id, false)}
+                                className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 ${r?.ok === false ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'border-line text-ink-6 hover:bg-white/5'}`}
+                              >
+                                <X size={12} /> Não confere
+                              </button>
+                              {r?.ok === false && (
+                                <input
+                                  value={r.obs}
+                                  onChange={(e) => anotar(a.id, e.target.value)}
+                                  placeholder="o que não bateu?"
+                                  className="px-2 py-1 border border-rose-500/40 rounded-lg text-xs bg-card focus-ring outline-none w-44"
+                                />
+                              )}
+                            </span>
+                          )}
+
+                          {g && (
+                            <span className={`ml-auto badge ${g.ok ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border-rose-500/30'}`} title={g.obs ?? ''}>
+                              {g.ok ? 'conferiu' : `não conferiu${g.obs ? ` · ${g.obs}` : ''}`}
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+
+                {emFechamento && (
+                  <div className="mt-4 pt-4 border-t border-line space-y-3">
+                    <label className="flex items-start gap-2 text-xs text-ink-6 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={whatsappRestrito}
+                        onChange={(e) => { setWhatsappRestrito(e.target.checked); setConfirmando(false) }}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <b className="text-ink">O WhatsApp da unidade foi restrito ou banido neste mês.</b>
+                        <span className="block text-ink-4">Zera o prêmio do mês inteiro — a regra vale para a unidade toda, não para uma operadora.</span>
+                      </span>
+                    </label>
+                    <textarea
+                      value={observacoes}
+                      onChange={(e) => setObservacoes(e.target.value)}
+                      placeholder="Observações do fechamento (opcional): o que aconteceu no mês, combinados, ressalvas."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-line rounded-xl text-xs bg-card focus-ring outline-none"
+                    />
+
+                    {reprovadas.length > 0 && (
+                      <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+                        {reprovadas.length === 1 ? '1 aferição não conferiu' : `${reprovadas.length} aferições não conferiram`}: o mês de quem marcou e de quem pontuou nessas aferições será anulado — zero de prêmio para elas, e os pontos delas saem do total da unidade.
+                      </p>
+                    )}
+                    {whatsappRestrito && (
+                      <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+                        Com o WhatsApp restrito, o prêmio da unidade será R$ 0,00 para todas.
+                      </p>
+                    )}
+                    {erroFechar && (
+                      <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">{erroFechar}</p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {!confirmando ? (
+                        <button
+                          type="button"
+                          disabled={faltam > 0 || fechando}
+                          onClick={() => setConfirmando(true)}
+                          className="px-4 py-2 rounded-xl bg-brand text-[#04120a] text-sm font-extrabold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <Lock size={14} /> Fechar {rotuloMes(competencia)}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={fechando}
+                            onClick={fecharMes}
+                            className="px-4 py-2 rounded-xl bg-emerald-500 text-[#04120a] text-sm font-extrabold disabled:opacity-40 flex items-center gap-2"
+                          >
+                            <Check size={14} /> {fechando ? 'Fechando…' : 'Confirmar: fechar e não mudar mais'}
+                          </button>
+                          <button type="button" disabled={fechando} onClick={() => setConfirmando(false)} className="px-3 py-2 rounded-xl border border-line text-sm text-ink-6 hover:bg-white/5">
+                            Voltar
+                          </button>
+                        </>
+                      )}
+                      {faltam > 0 && (
+                        <span className="text-xs text-ink-4">
+                          {faltam === 1 ? 'Falta responder 1 aferição.' : `Faltam responder ${faltam} aferições.`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </>
       )}
     </div>
@@ -597,6 +989,15 @@ function Mini({ rotulo, valor, cor }: { rotulo: string; valor: number; cor?: str
   return (
     <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5">
       <div className={`text-xl font-extrabold tabular-nums ${cor ?? 'text-ink-6'}`}>{num(valor)}</div>
+      <div className="text-[11px] text-ink-4 leading-tight">{rotulo}</div>
+    </div>
+  )
+}
+
+function MiniReal({ rotulo, valor, cor }: { rotulo: string; valor: number | null; cor?: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5">
+      <div className={`text-xl font-extrabold tabular-nums ${cor ?? 'text-ink-6'}`}>{real(valor)}</div>
       <div className="text-[11px] text-ink-4 leading-tight">{rotulo}</div>
     </div>
   )
