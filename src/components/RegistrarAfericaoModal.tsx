@@ -1,11 +1,16 @@
 import { useState, type FormEvent } from 'react'
-import { X, CheckCircle2 } from 'lucide-react'
+import { X, CheckCircle2, Building2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 // Marca que a aferição foi feita. A data vai para `data_ultima_afericao` — o MESMO
 // campo que calcula o vencimento —, então o lead sai da fila agora e volta sozinho
 // daqui a 2 anos, virando recompra. Também grava no histórico (canal 'presencial')
 // para ficar registrado quem marcou e quando.
+//
+// Com "aferiu em outro posto" ligado, o caminhão sai da fila do mesmo jeito, mas o
+// posto vira concorrente, o status volta a Novo e nada conta como aferição nossa
+// (nem ponto, nem Produção). Antes disso o único jeito era marcar Aferido com uma
+// nota — e o caminhão aparecia como cliente da casa sem ser.
 export default function RegistrarAfericaoModal({
   caminhoneiroId,
   onClose,
@@ -23,6 +28,7 @@ export default function RegistrarAfericaoModal({
     return d.toISOString().slice(0, 10)
   })
   const [notas, setNotas] = useState('')
+  const [outroPosto, setOutroPosto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,12 +52,18 @@ export default function RegistrarAfericaoModal({
     // operadora. O Postgres então recusa o update — não se atualiza uma linha para
     // a invisibilidade. A RPC valida a permissão pela mesma regra e grava.
     // De quebra, lead + histórico viram uma operação atômica.
-    const { error: rpcError } = await supabase.rpc('registrar_afericao', {
-      p_lead: caminhoneiroId,
-      p_data: data,
-      p_notas: notas.trim() || null,
-      p_marcar_aferido: true,
-    })
+    const { error: rpcError } = outroPosto
+      ? await supabase.rpc('registrar_afericao_fora', {
+          p_lead: caminhoneiroId,
+          p_data: data,
+          p_notas: notas.trim() || null,
+        })
+      : await supabase.rpc('registrar_afericao', {
+          p_lead: caminhoneiroId,
+          p_data: data,
+          p_notas: notas.trim() || null,
+          p_marcar_aferido: true,
+        })
 
     if (rpcError) {
       setSaving(false)
@@ -76,8 +88,9 @@ export default function RegistrarAfericaoModal({
           </button>
         </div>
         <p className="text-xs text-ink-4 mb-4">
-          O certificado passa a valer por 2 anos a partir desta data, e o lead volta para a fila quando estiver
-          perto de vencer.
+          {outroPosto
+            ? 'O caminhão sai da fila por 2 anos como cliente do concorrente. Não conta como aferição nossa nem gera ponto.'
+            : 'O certificado passa a valer por 2 anos a partir desta data, e o lead volta para a fila quando estiver perto de vencer.'}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -108,14 +121,39 @@ export default function RegistrarAfericaoModal({
             />
           </div>
 
+          <label
+            className={`flex items-start gap-2 p-3 rounded-xl border text-sm cursor-pointer select-none ${
+              outroPosto ? 'border-warn bg-warn/10' : 'border-line'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={outroPosto}
+              onChange={(e) => setOutroPosto(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-bold flex items-center gap-1">
+                <Building2 size={14} /> Aferiu em outro posto
+              </span>
+              <span className="block text-xs text-ink-4">
+                O motorista disse que já renovou no concorrente. Tira da fila sem marcar como cliente nosso.
+              </span>
+            </span>
+          </label>
+
           {error && <p className="text-sm text-danger">{error}</p>}
 
           <button
             type="submit"
             disabled={saving}
-            className="w-full py-2.5 rounded-xl bg-brand text-[#04120a] font-bold text-sm hover:bg-brand-d transition-colors disabled:opacity-60"
+            className={`w-full py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60 ${
+              outroPosto
+                ? 'bg-warn text-[#04120a] hover:bg-warn/90'
+                : 'bg-brand text-[#04120a] hover:bg-brand-d'
+            }`}
           >
-            {saving ? 'Salvando…' : 'Confirmar aferição'}
+            {saving ? 'Salvando…' : outroPosto ? 'Registrar aferição no concorrente' : 'Confirmar aferição'}
           </button>
         </form>
       </div>
