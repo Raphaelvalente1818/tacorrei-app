@@ -277,8 +277,11 @@ export default function Leads() {
 
   // Reparte os meses: atrasados somam numa chip só; os três primeiros meses à
   // frente ficam à mão; o resto vai para a lista suspensa.
+  // O número da chip é o TOTAL — o mesmo que a lista mostra ao clicar. "Sem contato"
+  // fica na dica: mostrar só os "Novo" na chip fazia o botão dizer 67 com a lista em 300.
   const mesAtual = new Date().toISOString().slice(0, 7)
-  const vencidos = meses.filter((m) => m.mes < mesAtual).reduce((s, m) => s + Number(m.novos ?? 0), 0)
+  const vencidos = meses.filter((m) => m.mes < mesAtual).reduce((s, m) => s + Number(m.total ?? 0), 0)
+  const vencidosNovos = meses.filter((m) => m.mes < mesAtual).reduce((s, m) => s + Number(m.novos ?? 0), 0)
   const aFrente = meses.filter((m) => m.mes >= mesAtual)
   const proximos = aFrente.slice(0, 3)
   const outros = aFrente.slice(3)
@@ -341,7 +344,7 @@ export default function Leads() {
                   ? 'bg-rose-500 text-white border-rose-500'
                   : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
               }`}
-              title="Certificado já vencido"
+              title={`Certificado já vencido — ${vencidosNovos} ainda sem contato`}
             >
               Vencidos <span className="tabular-nums opacity-80">{vencidos}</span>
             </button>
@@ -358,7 +361,7 @@ export default function Leads() {
             >
               {rotuloMes(m.mes)}
               <span className={`ml-1.5 tabular-nums ${mes === m.mes ? 'text-white/80' : 'text-ink-4'}`}>
-                {m.novos}
+                {m.total}
               </span>
             </button>
           ))}
@@ -372,7 +375,7 @@ export default function Leads() {
               <option value="">Outro mês…</option>
               {outros.map((m) => (
                 <option key={m.mes} value={m.mes}>
-                  {rotuloMes(m.mes)} — {m.novos} sem contato
+                  {rotuloMes(m.mes)} — {m.total} ({m.novos} sem contato)
                 </option>
               ))}
             </select>
