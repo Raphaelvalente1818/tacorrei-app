@@ -22,6 +22,9 @@ type Veiculo = {
   observacoes: string | null
   data_ultima_afericao: string | null
   venc: string | null
+  // venceu há mais tempo que o piso da unidade (12 meses): não é fila, só registro —
+  // fica na lista para o gestor da frota poder dizer "esse eu vendi"
+  antigo?: boolean
 }
 
 type Filtro = 'todos' | 'vencidos' | 'mes'
@@ -104,7 +107,7 @@ export default function FrotaModal({
 
   const mesAtual = hojeISO().slice(0, 7)
   const lista = useMemo(() => {
-    if (filtro === 'vencidos') return veiculos.filter((v) => (diasAte(v.venc) ?? 1) < 0)
+    if (filtro === 'vencidos') return veiculos.filter((v) => !v.antigo && (diasAte(v.venc) ?? 1) < 0)
     if (filtro === 'mes') return veiculos.filter((v) => v.venc?.slice(0, 7) === mesAtual)
     return veiculos
   }, [veiculos, filtro, mesAtual])
@@ -112,7 +115,7 @@ export default function FrotaModal({
   const contagem = useMemo(
     () => ({
       todos: veiculos.length,
-      vencidos: veiculos.filter((v) => (diasAte(v.venc) ?? 1) < 0).length,
+      vencidos: veiculos.filter((v) => !v.antigo && (diasAte(v.venc) ?? 1) < 0).length,
       mes: veiculos.filter((v) => v.venc?.slice(0, 7) === mesAtual).length,
     }),
     [veiculos, mesAtual]
@@ -249,8 +252,16 @@ export default function FrotaModal({
                       <td className="px-2 py-2 font-mono font-bold text-ink whitespace-nowrap">
                         {v.placa ?? '—'}
                       </td>
-                      <td className={`px-2 py-2 whitespace-nowrap ${classeVenc(v.venc)}`}>
+                      <td className={`px-2 py-2 whitespace-nowrap ${v.antigo ? 'text-ink-4' : classeVenc(v.venc)}`}>
                         {v.venc ? fmt(v.venc) : 'sem data'}
+                        {v.antigo && (
+                          <span
+                            title="Vencido há mais de 12 meses: fora da fila. Provavelmente vendido ou sem tacógrafo."
+                            className="ml-1.5 px-1.5 py-0.5 rounded-md bg-card2 text-[10px] font-bold uppercase tracking-wide text-ink-4"
+                          >
+                            antigo
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-2 w-2/5">
                         {emObs ? (
