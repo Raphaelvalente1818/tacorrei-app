@@ -3,7 +3,7 @@ import { LayoutDashboard, Phone, CalendarClock, LogOut, KeyRound, Shield, Buildi
 import { useAuth } from '../lib/AuthContext'
 
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, labelOperadora: 'Meu dia' },
   { to: '/leads', label: 'Leads & Ligações', icon: Phone, end: false },
   // Empresas com contrato: não é fila de prospecção, é carteira a avisar.
   { to: '/empresas', label: 'Empresas', icon: Building2, end: false },
@@ -85,7 +85,7 @@ export default function Layout() {
               className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}
             >
               <item.icon size={17} strokeWidth={2.2} />
-              {item.label}
+              {membro?.papel === 'operador' && 'labelOperadora' in item ? item.labelOperadora : item.label}
             </NavLink>
           ))}
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ClipboardCheck, DoorOpen, ListChecks, Trophy } from 'lucide-react'
+import { ClipboardCheck, DoorOpen, ListChecks, ShieldCheck, Trophy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { num } from './ui'
 
@@ -12,15 +12,27 @@ import { num } from './ui'
 //   4. O que foi marcado como aferido ontem — confere com as ordens de serviço?
 // A quarta é a única que o app não responde sozinho: ele mostra o que foi marcado,
 // o gestor bate com o caderno da oficina. É a auditoria diária, barata.
+//
+// Modo 'operadora' (0089): a mesma tela, em primeira pessoa — é a tela inicial dela.
+// Troca dois cartões: o 1 mostra só os pontos dela e o total da unidade (nada de placar
+// entre colegas: o método não quer uma torcendo contra a outra), e o 4 vira a defesa da
+// carteira — nossos que vencem em 30 dias e ninguém ligou. Os cartões 2 e 3 são iguais.
 
 type MeuDia = {
   hoje: string
   competencia: string
-  pontos: { nome: string; operadora_id: string; pontos: number; ontem: number; afericoes: number }[]
+  pontos?: { nome: string; operadora_id: string; pontos: number; ontem: number; afericoes: number }[]
+  eu?: { pontos: number; ontem: number; afericoes: number; empresas: number; unidade: number }
   pe_na_porta: { id: string; nome: string; janela: number; ultima_abordagem: string | null }[]
   pe_na_porta_total: number
   fila: { novos: number; total: number }
-  aferidos_ontem: { placa: string | null; dono: string | null; empresa: string | null; operadora: string | null; marcado_por: string | null; total: number }[]
+  aferidos_ontem?: { placa: string | null; dono: string | null; empresa: string | null; operadora: string | null; marcado_por: string | null; total: number }[]
+  defesa?: { total: number; sem_contato: number; lista: { id: string; placa: string | null; dono: string | null; empresa: string | null; venc: string }[] }
+}
+
+function fmtDia(iso: string): string {
+  const [a, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${a}`
 }
 
 function diasAtras(iso: string | null): string {
@@ -29,19 +41,22 @@ function diasAtras(iso: string | null): string {
   return d === 0 ? 'hoje' : d === 1 ? 'ontem' : `há ${d} dias`
 }
 
-export default function MeuDia({ unidadeId }: { unidadeId: string }) {
+export default function MeuDia({ unidadeId, modo = 'gestor' }: { unidadeId: string | null; modo?: 'gestor' | 'operadora' }) {
   const [dia, setDia] = useState<MeuDia | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const operadora = modo === 'operadora'
 
   const carregar = useCallback(async () => {
     setErro(null)
-    const { data, error } = await supabase.rpc('meu_dia', { p_unidade: unidadeId })
+    const { data, error } = operadora
+      ? await supabase.rpc('meu_dia_operadora')
+      : await supabase.rpc('meu_dia', { p_unidade: unidadeId })
     if (error) {
       setErro(error.message)
       return
     }
     setDia(data as MeuDia)
-  }, [unidadeId])
+  }, [unidadeId, operadora])
 
   useEffect(() => {
     carregar()
@@ -50,17 +65,43 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
   if (erro) return <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">{erro}</p>
   if (!dia) return <p className="text-sm text-ink-4">Carregando…</p>
 
-  const totalPontos = dia.pontos.reduce((s, p) => s + p.pontos, 0)
+  const pontos = dia.pontos ?? []
+  const totalPontos = pontos.reduce((s, p) => s + p.pontos, 0)
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      {/* 1. Pontos */}
+      {/* 1. Pontos — o gestor vê a equipe; a operadora vê só a si e o total da unidade */}
+      {operadora && dia.eu ? (
+        <div className="card p-5">
+          <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
+            <Trophy size={16} className="text-brand" /> 1. Meus pontos no mês
+          </h2>
+          <p className="text-xs text-ink-4 mb-3">Só aferição no nosso posto pontua — pelo que o caminhão era antes de vir. A origem de cada ponto está no Meu placar.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5">
+              <div className="text-2xl font-extrabold tabular-nums text-brand">{num(dia.eu.pontos)}</div>
+              <div className="text-[11px] text-ink-4">meus pontos {dia.eu.ontem > 0 ? <span className="text-emerald-300">· +{num(dia.eu.ontem)} ontem</span> : ''}</div>
+            </div>
+            <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5">
+              <div className="text-2xl font-extrabold tabular-nums text-ink">{num(dia.eu.afericoes)}</div>
+              <div className="text-[11px] text-ink-4">minhas aferições {dia.eu.empresas > 0 ? `· ${num(dia.eu.empresas)} empresa${dia.eu.empresas > 1 ? 's' : ''} conquistada${dia.eu.empresas > 1 ? 's' : ''}` : ''}</div>
+            </div>
+            <div className="rounded-xl border border-line bg-card/60 px-3 py-2.5 col-span-2">
+              <div className="text-xl font-extrabold tabular-nums text-ink-6">{num(dia.eu.unidade)}</div>
+              <div className="text-[11px] text-ink-4">pontos da unidade no mês — o bolo comum é sobre isso</div>
+            </div>
+          </div>
+          <p className="text-xs text-ink-4 mt-3">
+            <Link to="/placar" className="text-brand font-bold hover:underline">Abrir o Meu placar →</Link>
+          </p>
+        </div>
+      ) : (
       <div className="card p-5">
         <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
           <Trophy size={16} className="text-brand" /> 1. Pontos no mês, por operadora
         </h2>
         <p className="text-xs text-ink-4 mb-3">Só aferição no nosso posto pontua. Quem está parada há dias precisa de conversa, não de cobrança.</p>
-        {dia.pontos.length === 0 ? (
+        {pontos.length === 0 ? (
           <p className="text-sm text-ink-4">Nenhuma operadora ativa nesta unidade.</p>
         ) : (
           <table className="w-full text-sm">
@@ -73,7 +114,7 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
               </tr>
             </thead>
             <tbody>
-              {dia.pontos.map((p) => (
+              {pontos.map((p) => (
                 <tr key={p.operadora_id} className="border-b border-line last:border-0">
                   <td className="py-2 font-semibold text-ink">{p.nome}</td>
                   <td className="py-2 text-right tabular-nums font-extrabold text-brand">{num(p.pontos)}</td>
@@ -92,6 +133,7 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
           </table>
         )}
       </div>
+      )}
 
       {/* 2. Pé na porta */}
       <div className="card p-5">
@@ -99,7 +141,9 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
           <DoorOpen size={16} className="text-emerald-400" /> 2. Pé na porta sem contato há mais de 7 dias
         </h2>
         <p className="text-xs text-ink-4 mb-3">
-          Empresas que já aferem conosco e têm caminhão do concorrente vencendo em 90 dias. É a ligação mais barata que existe.
+          {operadora
+            ? 'Empresas que já aferem conosco e têm caminhão do concorrente vencendo em 90 dias. Comece o dia por aqui: é a ligação mais barata que existe — "já cuidamos do X de vocês".'
+            : 'Empresas que já aferem conosco e têm caminhão do concorrente vencendo em 90 dias. É a ligação mais barata que existe.'}
         </p>
         {dia.pe_na_porta.length === 0 ? (
           (dia.pe_na_porta_total ?? 0) === 0 ? (
@@ -132,7 +176,7 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
         <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
           <ListChecks size={16} className="text-blue-300" /> 3. "Novo" que ainda restam na fila do mês
         </h2>
-        <p className="text-xs text-ink-4 mb-3">Caminhões que vencem neste mês (ou já venceram) e ninguém tocou. No fim do mês, isto tem de estar perto de zero.</p>
+        <p className="text-xs text-ink-4 mb-3">{operadora ? 'Caminhões que vencem neste mês (ou já venceram) e ninguém tocou ainda. É o seu estoque da semana.' : 'Caminhões que vencem neste mês (ou já venceram) e ninguém tocou. No fim do mês, isto tem de estar perto de zero.'}</p>
         <div className="flex items-end gap-4">
           <div>
             <div className={`text-3xl font-extrabold tabular-nums ${dia.fila.novos > 0 ? 'text-amber-300' : 'text-emerald-400'}`}>{num(dia.fila.novos)}</div>
@@ -148,7 +192,41 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
         </p>
       </div>
 
-      {/* 4. Aferidos ontem */}
+      {/* 4. Gestor: aferidos de ontem × OS. Operadora: a defesa da carteira. */}
+      {operadora && dia.defesa ? (
+        <div className="card p-5">
+          <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
+            <ShieldCheck size={16} className="text-blue-300" /> 4. Nossos que vencem em 30 dias e ninguém ligou
+          </h2>
+          <p className="text-xs text-ink-4 mb-3">
+            Cliente da casa não dá ponto de conquista, mas é quem paga a conta — e se ele vencer sem um lembrete nosso, o concorrente liga primeiro. A renovação pontua, e a carteira defendida abaixo de 60% tira o bolo de todo mundo.
+          </p>
+          {dia.defesa.total === 0 ? (
+            <p className="text-sm text-ink-6">Nenhum cliente nosso vence nos próximos 30 dias.</p>
+          ) : dia.defesa.sem_contato === 0 ? (
+            <p className="text-sm text-emerald-300">Todos os {num(dia.defesa.total)} clientes nossos que vencem em 30 dias já receberam contato.</p>
+          ) : (
+            <>
+              <div className="flex items-end gap-3 mb-2">
+                <div className="text-3xl font-extrabold tabular-nums text-amber-300">{num(dia.defesa.sem_contato)}</div>
+                <div className="text-xs text-ink-6 pb-1">de <b className="text-ink">{num(dia.defesa.total)}</b> ainda sem lembrete</div>
+              </div>
+              <ul className="text-sm space-y-1.5">
+                {dia.defesa.lista.slice(0, 8).map((d) => (
+                  <li key={d.id} className="flex items-center justify-between gap-3">
+                    <Link to={`/leads/${d.id}`} className="truncate hover:underline">
+                      <span className="font-mono font-bold text-ink">{d.placa ?? '—'}</span>
+                      <span className="text-ink-6"> · {d.empresa ?? d.dono ?? ''}</span>
+                    </Link>
+                    <span className="text-xs text-ink-4 shrink-0">vence {fmtDia(d.venc)}</span>
+                  </li>
+                ))}
+              </ul>
+              {dia.defesa.lista.length > 8 && <p className="text-xs text-ink-4 mt-2">E mais {num(dia.defesa.lista.length - 8)} — estão na fila, ordenados por vencimento.</p>}
+            </>
+          )}
+        </div>
+      ) : (
       <div className="card p-5">
         <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
           <ClipboardCheck size={16} className="text-amber-300" /> 4. Marcados como aferidos ontem
@@ -156,11 +234,11 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
         <p className="text-xs text-ink-4 mb-3">
           Bata esta lista com as ordens de serviço de ontem. Caminhão que passou pelo posto e não está aqui: alguém esqueceu de marcar. Está aqui e não passou: conversa séria.
         </p>
-        {dia.aferidos_ontem.length === 0 ? (
+        {(dia.aferidos_ontem ?? []).length === 0 ? (
           <p className="text-sm text-ink-6">Nenhum aferido marcado ontem. Se houve caminhão no posto, falta registro.</p>
         ) : (
           <ul className="text-sm space-y-1.5">
-            {dia.aferidos_ontem.map((a, i) => (
+            {(dia.aferidos_ontem ?? []).map((a, i) => (
               <li key={i} className="flex items-center justify-between gap-3">
                 <span className="truncate">
                   <span className="font-mono font-bold text-ink">{a.placa ?? '—'}</span>
@@ -175,6 +253,7 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
           </ul>
         )}
       </div>
+      )}
     </div>
   )
 }

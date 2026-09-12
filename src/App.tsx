@@ -11,6 +11,26 @@ import TrocarSenha from './pages/TrocarSenha'
 import RedefinirSenha from './pages/RedefinirSenha'
 import Admin from './pages/Admin'
 import Placar from './pages/Placar'
+import MeuDia from './pages/admin/MeuDia'
+
+// A tela inicial depende do papel: a operadora abre no Meu dia dela (0089) —
+// as dicas do que fazer hoje; gestor e admin abrem no Dashboard (o Meu dia deles
+// está no painel de Gestão).
+function Inicio() {
+  const { membro } = useAuth()
+  if (membro?.papel === 'operador') {
+    return (
+      <div>
+        <div className="mb-5">
+          <h1 className="text-xl font-extrabold text-ink">Meu dia</h1>
+          <p className="text-sm text-ink-4">Quatro cartões, todo dia de manhã: onde estão os pontos, quem ligar primeiro, o que ainda falta tocar e quem não pode vencer sem um lembrete nosso.</p>
+        </div>
+        <MeuDia unidadeId={null} modo="operadora" />
+      </div>
+    )
+  }
+  return <Dashboard />
+}
 
 function PrivateArea() {
   const { session, loading } = useAuth()
@@ -28,7 +48,7 @@ function PrivateArea() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
+        <Route index element={<Inicio />} />
         <Route path="leads" element={<Leads />} />
         <Route path="leads/:id" element={<LeadDetail />} />
         <Route path="empresas" element={<Empresas />} />
