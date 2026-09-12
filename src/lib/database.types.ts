@@ -58,6 +58,10 @@ export interface Caminhoneiro {
   // Onde o veículo fez a ÚLTIMA aferição (coluna W da base do RNTRC).
   // Separa cliente da casa de cliente de concorrente — e isso decide o canal.
   posto_afericao: string | null
+  // Calculado no banco (posto_do_grupo, 0086): o posto da última aferição é de uma
+  // unidade do nosso grupo. Vem na fila (fila_leads) e na ficha (obter_lead); o
+  // front não tem mais nome de posto escrito.
+  nosso?: boolean
   // "Pode me mandar no WhatsApp?" dito na ligação. Sem isso, cliente de
   // concorrente não recebe mensagem.
   autorizou_whatsapp: boolean

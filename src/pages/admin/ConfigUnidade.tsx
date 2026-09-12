@@ -14,6 +14,7 @@ type UnidadeCfg = {
   id: string
   nome: string
   posto_afericao: string | null
+  posto_chave: string | null
   marca: string | null
   endereco: string | null
   telefone: string | null
@@ -68,7 +69,7 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
   if (!u || !orig) return <p className="text-sm text-ink-4">Carregando…</p>
 
   const campos: (keyof UnidadeCfg)[] = [
-    'nome', 'posto_afericao', 'marca', 'endereco', 'telefone', 'janela_dias', 'piso_dias',
+    'nome', 'posto_afericao', 'posto_chave', 'marca', 'endereco', 'telefone', 'janela_dias', 'piso_dias',
     'limite_whatsapp_dia', 'intervalo_whatsapp_min', 'cooldown_telefone_dias', 'agrupamento_dias', 'unidade_edita_premio',
   ]
   const mudados = campos.filter((k) => u[k] !== orig[k])
@@ -121,8 +122,13 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
           </div>
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-4 mb-1">Nome do posto (como está no Inmetro)</label>
-            <input value={u.posto_afericao ?? ''} onChange={(e) => set('posto_afericao', e.target.value)} placeholder="Ex.: TACORREI TACÓGRAFOS COMÉRCIO E SERVIÇOS LTDA-ME." className={`${input} w-full`} />
-            <p className="text-[11px] text-ink-4 mt-0.5">É o que o botão "Aferido" grava no caminhão e o que define "nosso" nos painéis.</p>
+            <input value={u.posto_afericao ?? ''} onChange={(e) => set('posto_afericao', e.target.value)} placeholder="Razão social, como consta no certificado do Inmetro" className={`${input} w-full`} />
+            <p className="text-[11px] text-ink-4 mt-0.5">É o que o botão "Aferido" grava no caminhão.</p>
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-4 mb-1">Palavra-chave do posto</label>
+            <input value={u.posto_chave ?? ''} onChange={(e) => set('posto_chave', e.target.value.toUpperCase())} placeholder="1ª palavra do nome do posto" className={`${input} w-full font-mono`} />
+            <p className="text-[11px] text-ink-4 mt-0.5">Caminhão cujo posto de aferição contém esta palavra é "nosso" (cliente da casa) em todas as unidades do mesmo grupo. Vazio = primeira palavra do nome do posto.</p>
           </div>
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-4 mb-1">Marca (como assina a mensagem)</label>

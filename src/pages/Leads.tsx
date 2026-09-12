@@ -92,13 +92,12 @@ function normalizaPlaca(s: string): string {
 }
 const PLACA_COMPLETA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/
 
-// Postos do grupo: quem aferiu aqui é cliente da casa. Quem aferiu em outro lugar
-// é cliente de concorrente — e para esse o caminho é LIGAR, não mandar mensagem.
-// Foi a mistura dos dois que restringiu o número da Tacorrei em 28/08.
-function ehCliente(posto: string | null): boolean {
-  if (!posto) return false
-  const p = posto.toUpperCase()
-  return p.includes('TACORREI') || p.includes('LACRE')
+// Quem aferiu num posto do grupo é cliente da casa; quem aferiu em outro lugar é
+// cliente de concorrente — e para esse o caminho é LIGAR, não mandar mensagem.
+// Foi a mistura dos dois que restringiu o número da Tacorrei em 28/08. A conta é
+// do banco (`nosso`, posto_do_grupo): o front não sabe o nome de posto nenhum.
+function ehCliente(lead: { nosso?: boolean }): boolean {
+  return lead.nosso ?? false
 }
 
 const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -524,7 +523,7 @@ export default function Leads() {
                         canal: cliente recebe mensagem, concorrente se liga. */}
                     <td className="px-5 py-3">
                       <span className="inline-flex flex-wrap items-center gap-1.5">
-                        {ehCliente(lead.posto_afericao) ? (
+                        {ehCliente(lead) ? (
                           <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
                             Cliente
                           </span>

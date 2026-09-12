@@ -27,8 +27,8 @@ const VALIDADE_ANOS = 2
 // Marca, endereço e os textos variáveis da mensagem vêm do cadastro da unidade
 // (aba Unidade → Mensagens; 0085). `useConfigMensagem()` aplica os padrões.
 
-// Cliente da casa = a última aferição foi num posto do grupo (Tacorrei ou Lacre).
-// Para ele a mensagem é lembrete de fornecedor. Para quem aferiu em concorrente é
+// Cliente da casa = a última aferição foi num posto do grupo (`nosso`, calculado
+// no banco por posto_do_grupo). Para ele a mensagem é lembrete de fornecedor. Para quem aferiu em concorrente é
 // abordagem fria — e foi ela que restringiu o número da Tacorrei em 28/08.
 //
 // Numa FROTA a conta é outra: basta UM caminhão ter aferido conosco. Quem atende
@@ -37,8 +37,7 @@ const VALIDADE_ANOS = 2
 // segundo caminhão dela não é abordagem fria, é crescer uma conta que já é nossa.
 function ehClienteDaCasa(lead: LeadComEmpresa): boolean {
   if (lead.empresa) return lead.empresa.ja_e_cliente
-  const p = (lead.posto_afericao ?? '').toUpperCase()
-  return p.includes('TACORREI') || p.includes('LACRE')
+  return lead.nosso ?? false
 }
 
 // Quem pode receber mensagem: cliente da casa, ou quem autorizou na ligação.
