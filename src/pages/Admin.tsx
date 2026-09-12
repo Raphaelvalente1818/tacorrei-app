@@ -150,7 +150,7 @@ export default function Admin() {
         <>
           {grupo === 'dia' && unidadeId && <MeuDia unidadeId={unidadeId} />}
 
-          {grupo === 'gestao' && subGestao === 'meta' && <MetaDoMes />}
+          {grupo === 'gestao' && subGestao === 'meta' && <MetaDoMes unidadeId={unidadeId} />}
           {grupo === 'gestao' && subGestao === 'producao' && <Producao />}
           {grupo === 'gestao' && subGestao === 'equipe' && <Acessos podeTudo={isAdmin} unidadeFixa={unidadeId} />}
           {grupo === 'gestao' && subGestao === 'mensagens' && unidadeId && <Mensagens unidadeId={unidadeId} />}

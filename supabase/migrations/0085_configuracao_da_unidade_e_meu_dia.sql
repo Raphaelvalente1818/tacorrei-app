@@ -11,6 +11,7 @@
 -- passam a viver aqui: unidade nova = cadastro, não deploy.
 --
 -- meu_dia(unidade): as quatro perguntas da rotina de 10 minutos do gestor.
+-- (No banco aplicada como 0085 + 0085b; este arquivo é a versão final.)
 
 alter table public.unidades
   add column if not exists marca text,
@@ -147,7 +148,7 @@ as $$
 declare
   v_comp date := date_trunc('month', current_date)::date;
   v_fim  date := (date_trunc('month', current_date) + interval '1 month')::date;
-  v_pontos jsonb; v_pe jsonb; v_novos jsonb; v_ontem jsonb; v_painel jsonb;
+  v_pontos jsonb; v_pe jsonb; v_novos jsonb; v_ontem jsonb; v_painel jsonb; v_pe_total integer;
 begin
   if not public.is_equipe_ativa() then raise exception 'acesso negado'; end if;
   if not (public.is_admin() or (public.is_admin_unidade() and p_unidade = public.unidade_do_usuario())) then
@@ -170,6 +171,12 @@ begin
   -- 2. Pé na porta (empresa mista com caminhão do concorrente vencendo em 90 dias)
   --    sem abordagem há mais de 7 dias.
   v_painel := public.empresas_painel(p_unidade, null);
+  -- Quantas pé na porta têm caminhão vencendo em 90 dias (0085b: para a tela saber se
+  -- "nenhuma pendente" quer dizer "todas abordadas" ou "não existe nenhuma").
+  select count(*) into v_pe_total
+  from jsonb_array_elements(v_painel) x
+  where x->>'classe' = 'mista' and (x->>'janela')::int > 0;
+
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', x->>'id', 'nome', x->>'nome', 'janela', (x->>'janela')::int,
            'ultima_abordagem', x->>'ultima_abordagem')
@@ -204,6 +211,7 @@ begin
     'competencia', v_comp,
     'pontos', v_pontos,
     'pe_na_porta', v_pe,
+    'pe_na_porta_total', v_pe_total,
     'fila', v_novos,
     'aferidos_ontem', v_ontem
   );

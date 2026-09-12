@@ -18,6 +18,7 @@ type MeuDia = {
   competencia: string
   pontos: { nome: string; operadora_id: string; pontos: number; ontem: number; afericoes: number }[]
   pe_na_porta: { id: string; nome: string; janela: number; ultima_abordagem: string | null }[]
+  pe_na_porta_total: number
   fila: { novos: number; total: number }
   aferidos_ontem: { placa: string | null; dono: string | null; empresa: string | null; operadora: string | null; marcado_por: string | null; total: number }[]
 }
@@ -101,7 +102,11 @@ export default function MeuDia({ unidadeId }: { unidadeId: string }) {
           Empresas que já aferem conosco e têm caminhão do concorrente vencendo em 90 dias. É a ligação mais barata que existe.
         </p>
         {dia.pe_na_porta.length === 0 ? (
-          <p className="text-sm text-emerald-300">Todas as pé na porta com caminhão vencendo foram abordadas nos últimos 7 dias.</p>
+          (dia.pe_na_porta_total ?? 0) === 0 ? (
+            <p className="text-sm text-ink-6">Nenhuma empresa pé na porta com caminhão vencendo em 90 dias nesta unidade.</p>
+          ) : (
+            <p className="text-sm text-emerald-300">Todas as {num(dia.pe_na_porta_total)} pé na porta com caminhão vencendo foram abordadas nos últimos 7 dias.</p>
+          )
         ) : (
           <>
             <ul className="text-sm space-y-1.5">

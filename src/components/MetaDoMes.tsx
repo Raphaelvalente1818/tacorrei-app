@@ -204,6 +204,12 @@ function rotuloMes(iso: string): string {
   return `${MESES_PT[Number(m) - 1]} de ${a}`
 }
 
+// "Setembro de 2026" — só a inicial; a classe `capitalize` do CSS pegava o "De".
+function rotuloMesCap(iso: string): string {
+  const r = rotuloMes(iso)
+  return r.charAt(0).toUpperCase() + r.slice(1)
+}
+
 function fmtDia(iso: string | null): string {
   if (!iso) return '—'
   const [a, m, d] = iso.slice(0, 10).split('-')
@@ -236,7 +242,8 @@ function projecaoPremio(pontos: number, premio: Premio | null): number | null {
 // modo 'admin'     → aba Meta do Admin: todas as operadoras, auditoria, escolhe a unidade.
 // modo 'operadora' → "Meu placar": só os pontos dela, o total da unidade ao lado,
 //                    sem auditoria. A mesma tela, para os dois lerem o mesmo número.
-export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operadora' }) {
+// `unidadeId` vem do painel (Gestão → Meta): quando dado, a tela não mostra seletor próprio.
+export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel = null }: { modo?: 'admin' | 'operadora'; unidadeId?: string | null }) {
   const { membro, unidades, unidadeAtiva } = useAuth()
   const isAdmin = membro?.papel === 'admin'
   const souOperadora = modo === 'operadora'
@@ -247,7 +254,7 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
   const unidadeId = souOperadora
     ? (membro?.unidade_id ?? null)
     : isAdmin
-      ? (unidadeAtiva ?? unidadeEscolhida ?? unidades[0]?.id ?? null)
+      ? (unidadeDoPainel ?? unidadeAtiva ?? unidadeEscolhida ?? unidades[0]?.id ?? null)
       : (membro?.unidade_id ?? null)
 
   const [competencia, setCompetencia] = useState(() => primeiroDoMes(new Date()))
@@ -368,8 +375,8 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
           <button onClick={() => andarMes(-1)} className="p-2 rounded-lg border border-line text-ink-6 hover:bg-white/5" aria-label="Mês anterior">
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm font-extrabold text-ink min-w-44 text-center capitalize">
-            {rotuloMes(competencia)}
+          <span className="text-sm font-extrabold text-ink min-w-44 text-center">
+            {rotuloMesCap(competencia)}
           </span>
           <button onClick={() => andarMes(1)} className="p-2 rounded-lg border border-line text-ink-6 hover:bg-white/5" aria-label="Próximo mês">
             <ChevronRight size={16} />
@@ -377,7 +384,7 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-sm">
-          {!souOperadora && isAdmin && !unidadeAtiva && unidades.length > 1 && (
+          {!souOperadora && isAdmin && !unidadeDoPainel && !unidadeAtiva && unidades.length > 1 && (
             <select
               value={unidadeId}
               onChange={(e) => setUnidadeEscolhida(e.target.value)}
@@ -388,7 +395,7 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
               ))}
             </select>
           )}
-          {meta && (
+          {meta && !unidadeDoPainel && (
             <span className="text-ink-6">
               <b className="text-ink">{meta.unidade.nome}</b>
             </span>
@@ -615,7 +622,7 @@ export default function MetaDoMes({ modo = 'admin' }: { modo?: 'admin' | 'operad
           <div className="card p-5">
             <h2 className="text-sm font-extrabold text-ink mb-1">O que existia para trabalhar</h2>
             <p className="text-xs text-ink-4 mb-4">
-              Caminhões com certificado vencendo em <span className="capitalize">{rotuloMes(competencia)}</span>, pelo estado atual da base. É daqui que a meta da fase 2 vai nascer.
+              Caminhões com certificado vencendo em {rotuloMes(competencia)}, pelo estado atual da base. É daqui que a meta da fase 2 vai nascer.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <Mini rotulo="Nossos, a renovar" valor={u.vencem_no_mes.nossos} cor="text-blue-300" />
