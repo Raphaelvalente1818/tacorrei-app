@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Building2, Save, SlidersHorizontal } from 'lucide-react'
+import { Building2, PauseCircle, PlayCircle, Save, SlidersHorizontal } from 'lucide-react'
+import ConfirmarModal from '../../components/ConfirmarModal'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { botao, chip, chipOff, chipOn, input } from './ui'
@@ -25,6 +26,7 @@ type UnidadeCfg = {
   cooldown_telefone_dias: number
   agrupamento_dias: number
   unidade_edita_premio: boolean
+  suspensa_em: string | null
 }
 
 const JANELAS: { label: string; dias: number | null }[] = [
@@ -47,6 +49,7 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
   const [erro, setErro] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
+  const [suspendendo, setSuspendendo] = useState<'suspender' | 'reativar' | null>(null)
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -94,6 +97,19 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
     setOrig(data as UnidadeCfg)
     await recarregarUnidades()
     setMsg({ tipo: 'ok', texto: 'Salvo. Vale para todas as telas, sem deploy.' })
+  }
+
+  // Item 19 da matriz: bloqueia o login de todo mundo da unidade, dados intactos.
+  async function suspender(motivo: string) {
+    if (!u) return
+    const { data, error } = await supabase.rpc('suspender_unidade', {
+      p_unidade: unidadeId, p_suspender: suspendendo === 'suspender', p_motivo: motivo || null,
+    })
+    if (error) throw new Error(error.message)
+    setU(data as UnidadeCfg)
+    setOrig(data as UnidadeCfg)
+    setSuspendendo(null)
+    await recarregarUnidades()
   }
 
   const numInput = (k: 'limite_whatsapp_dia' | 'intervalo_whatsapp_min' | 'cooldown_telefone_dias' | 'agrupamento_dias', rotulo: string, ajuda: string) => (
@@ -191,6 +207,43 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
           </span>
         </label>
       </div>
+
+      <div className={`card p-5 ${orig.suspensa_em ? 'border-rose-500/40' : ''}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-extrabold text-ink flex items-center gap-2">
+              {orig.suspensa_em ? <PauseCircle size={16} className="text-rose-400" /> : <PlayCircle size={16} className="text-emerald-400" />}
+              {orig.suspensa_em ? `Unidade suspensa desde ${new Date(orig.suspensa_em).toLocaleDateString('pt-BR')}` : 'Unidade ativa'}
+            </h2>
+            <p className="text-xs text-ink-4 mt-1">
+              Suspender bloqueia o login de todo mundo da unidade (gestor e operadoras) na hora. Leads, contatos, pontos e fechamentos ficam intactos; reativar é o mesmo botão.
+              Para uma unidade de fora que parou de pagar, ou para encerrar uma unidade de teste.
+            </p>
+          </div>
+          {orig.suspensa_em ? (
+            <button onClick={() => setSuspendendo('reativar')} className={botao}><PlayCircle size={15} /> Reativar unidade</button>
+          ) : (
+            <button onClick={() => setSuspendendo('suspender')} className="flex items-center gap-1.5 border border-rose-500/40 text-rose-300 text-sm font-bold px-4 py-2 rounded-xl hover:bg-rose-500/10">
+              <PauseCircle size={15} /> Suspender unidade
+            </button>
+          )}
+        </div>
+      </div>
+
+      {suspendendo && (
+        <ConfirmarModal
+          titulo={suspendendo === 'suspender' ? `Suspender ${orig.nome}?` : `Reativar ${orig.nome}?`}
+          texto={suspendendo === 'suspender'
+            ? 'Ninguém desta unidade consegue mais entrar no app a partir de agora — gestor e operadoras. Nada é apagado. Fica registrado quem suspendeu e por quê.'
+            : 'Os logins da unidade voltam a funcionar na hora. Fica registrado quem reativou.'}
+          rotuloConfirmar={suspendendo === 'suspender' ? 'Suspender' : 'Reativar'}
+          perigo={suspendendo === 'suspender'}
+          pedirMotivo
+          motivoObrigatorio={suspendendo === 'suspender'}
+          onConfirmar={suspender}
+          onCancelar={() => setSuspendendo(null)}
+        />
+      )}
 
       <div className="flex items-center gap-3">
         <button onClick={salvar} disabled={mudados.length === 0 || salvando} className={botao}>

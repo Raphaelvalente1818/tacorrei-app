@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import ConfirmarModal from '../../components/ConfirmarModal'
 
 interface Unidade {
   id: string
@@ -68,22 +69,16 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
     setMembros((prev) => prev.map((m) => (m.user_id === user_id ? { ...m, ...campos } : m)))
   }
 
+  // A exclusão passa pelo popup de confirmação (regra da casa: toda deleção confirma).
+  const [excluindo, setExcluindo] = useState<Membro | null>(null)
   async function excluir(m: Membro) {
-    if (
-      !window.confirm(
-        `Excluir definitivamente o acesso de ${m.nome}? O login será apagado. O histórico de ligações/agendamentos é mantido (fica sem dono).`
-      )
-    )
-      return
     const { data, error } = await supabase.functions.invoke('admin-excluir-usuario', {
       body: { user_id: m.user_id },
     })
     const erro = error ? error.message : (data as { error?: string })?.error
-    if (erro) {
-      setMsg({ tipo: 'erro', texto: erro })
-      return
-    }
+    if (erro) throw new Error(erro)
     setMembros((prev) => prev.filter((x) => x.user_id !== m.user_id))
+    setExcluindo(null)
   }
 
   async function criarAcesso() {
@@ -236,7 +231,7 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
                   </td>
                   <td className="px-5 py-3 text-right">
                     <button
-                      onClick={() => excluir(m)}
+                      onClick={() => setExcluindo(m)}
                       className="text-ink-4 hover:text-rose-400"
                       title="Excluir acesso definitivamente"
                     >
@@ -254,6 +249,15 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
           </table>
         )}
       </div>
+      {excluindo && (
+        <ConfirmarModal
+          titulo={`Excluir o acesso de ${excluindo.nome}?`}
+          texto={'O login é apagado de vez e não volta. O histórico de contatos, agendamentos e pontos fica preservado, sem dono.\n\nSe a ideia é só tirar a pessoa do ar por um tempo, use "Desativar" em vez de excluir.'}
+          rotuloConfirmar="Excluir de vez"
+          onConfirmar={() => excluir(excluindo)}
+          onCancelar={() => setExcluindo(null)}
+        />
+      )}
       <p className="text-xs text-ink-4">
         <b>Desativar</b> bloqueia o login sem apagar o histórico. <b>Excluir</b> (lixeira) apaga o acesso de vez — o histórico de ligações/agendamentos fica preservado, porém sem dono.
       </p>

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MapPin, Truck, CalendarPlus, FileText, History, Pencil, Check, X,
-  MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2, Building2,
+  MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2, Building2, Undo2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useConfigMensagem } from '../lib/AuthContext'
@@ -21,6 +21,7 @@ import Badge from '../components/Badge'
 import RegistrarLigacaoForm from '../components/RegistrarLigacaoForm'
 import AgendarAfericaoModal from '../components/AgendarAfericaoModal'
 import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
+import ConfirmarModal from '../components/ConfirmarModal'
 
 const VALIDADE_ANOS = 2
 
@@ -546,11 +547,36 @@ export default function LeadDetail() {
     carregar()
   }
 
+  // ── Correções (com confirmação sempre; com registro quando é do gestor) ────
+  // Três ações diferentes no mesmo histórico:
+  //   • contato da placa → a operadora apaga o próprio (sem registro);
+  //   • contato COM A EMPRESA → só gestor/admin, via apagar_contato_empresa (fica em `correcoes`);
+  //   • "Aferido" → só gestor/admin, via desfazer_afericao: volta data, posto e status,
+  //     apaga o ponto e a linha do histórico de posto (fica em `correcoes`).
+  const podeCorrigir = membro?.papel === 'admin' || membro?.papel === 'admin_unidade'
+  const [confirmacao, setConfirmacao] = useState<{ tipo: 'contato' | 'empresa' | 'aferido'; ligacao: Ligacao } | null>(null)
+
   async function deletarContato(l: Ligacao) {
     if (!lead) return
-    if (!window.confirm('Excluir este registro de contato?')) return
-    await supabase.from('ligacoes').delete().eq('id', l.id)
+    const { error } = await supabase.from('ligacoes').delete().eq('id', l.id)
+    if (error) throw new Error(error.message)
     if (l.canal === 'whatsapp') await recomputarUltimoWhatsapp(lead.id)
+    setConfirmacao(null)
+    carregar()
+  }
+
+  async function apagarContatoEmpresa(l: Ligacao, motivo: string) {
+    const { error } = await supabase.rpc('apagar_contato_empresa', { p_ligacao: l.id, p_motivo: motivo || null })
+    if (error) throw new Error(error.message)
+    setConfirmacao(null)
+    carregar()
+  }
+
+  async function desfazerAfericao(motivo: string) {
+    if (!lead) return
+    const { error } = await supabase.rpc('desfazer_afericao', { p_lead: lead.id, p_motivo: motivo || null })
+    if (error) throw new Error(error.message)
+    setConfirmacao(null)
     carregar()
   }
 
@@ -953,11 +979,30 @@ export default function LeadDetail() {
                             timeStyle: 'short',
                           })}
                         </span>
-                        {/* O contato de frota não se apaga daqui: ele não é desta
-                            placa, é da empresa inteira. */}
-                        {!l.empresa_id && (
+                        {/* O que cada lixeira faz depende do que é a linha — ver "Correções". */}
+                        {l.resultado === 'aferido' ? (
+                          podeCorrigir && (
+                            <button
+                              onClick={() => setConfirmacao({ tipo: 'aferido', ligacao: l })}
+                              className="text-ink-4 hover:text-rose-400"
+                              title="Desfazer esta aferição (volta data, posto e ponto)"
+                            >
+                              <Undo2 size={14} />
+                            </button>
+                          )
+                        ) : l.empresa_id ? (
+                          podeCorrigir && (
+                            <button
+                              onClick={() => setConfirmacao({ tipo: 'empresa', ligacao: l })}
+                              className="text-ink-4 hover:text-rose-400"
+                              title="Apagar este contato com a empresa (fica registrado)"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )
+                        ) : (
                           <button
-                            onClick={() => deletarContato(l)}
+                            onClick={() => setConfirmacao({ tipo: 'contato', ligacao: l })}
                             className="text-ink-4 hover:text-rose-400"
                             title="Excluir este registro de contato"
                           >
@@ -1112,6 +1157,37 @@ export default function LeadDetail() {
             setShowAferido(false)
             carregar()
           }}
+        />
+      )}
+      {confirmacao?.tipo === 'contato' && (
+        <ConfirmarModal
+          titulo="Excluir este registro de contato?"
+          texto="O registro some do histórico deste caminhão e não volta. Se foi um WhatsApp, o caminhão volta a poder receber mensagem."
+          rotuloConfirmar="Excluir"
+          onConfirmar={() => deletarContato(confirmacao.ligacao)}
+          onCancelar={() => setConfirmacao(null)}
+        />
+      )}
+      {confirmacao?.tipo === 'empresa' && (
+        <ConfirmarModal
+          titulo="Apagar este contato com a empresa?"
+          texto="Ele vale para todos os caminhões da frota — some do histórico de todos. Se esse contato já trouxe uma aferição pontuada, o banco recusa. Fica registrado quem apagou e por quê."
+          rotuloConfirmar="Apagar e registrar"
+          pedirMotivo
+          motivoObrigatorio
+          onConfirmar={(motivo) => apagarContatoEmpresa(confirmacao.ligacao, motivo)}
+          onCancelar={() => setConfirmacao(null)}
+        />
+      )}
+      {confirmacao?.tipo === 'aferido' && (
+        <ConfirmarModal
+          titulo="Desfazer esta aferição?"
+          texto={'O caminhão volta ao que era antes: data, posto e situação anteriores. O ponto que ela gerou é removido e o caminhão volta para a fila. Mês já fechado só o admin geral desfaz.\n\nFica registrado quem desfez e por quê.'}
+          rotuloConfirmar="Desfazer e registrar"
+          pedirMotivo
+          motivoObrigatorio
+          onConfirmar={(motivo) => desfazerAfericao(motivo)}
+          onCancelar={() => setConfirmacao(null)}
         />
       )}
     </div>

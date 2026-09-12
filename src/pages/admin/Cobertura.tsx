@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2, MapPin } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import ConfirmarModal from '../../components/ConfirmarModal'
 
 interface UnidadeJanela {
   id: string
@@ -80,9 +81,12 @@ export default function Cobertura() {
     carregarCidades(sel)
   }
 
+  const [removendo, setRemovendo] = useState<CidadeCobertura | null>(null)
   async function removeCidade(id: string) {
-    await supabase.from('unidade_cidades').delete().eq('id', id)
+    const { error } = await supabase.from('unidade_cidades').delete().eq('id', id)
+    if (error) throw new Error(error.message)
     setCidades((prev) => prev.filter((c) => c.id !== id))
+    setRemovendo(null)
   }
 
   if (loading) return <p className="text-sm text-ink-4">Carregando…</p>
@@ -144,7 +148,7 @@ export default function Cobertura() {
                   <MapPin size={15} className="text-brand" /> {c.cidade}
                 </span>
                 <button
-                  onClick={() => removeCidade(c.id)}
+                  onClick={() => setRemovendo(c)}
                   className="text-ink-4 hover:text-rose-400"
                   title="Remover cidade"
                 >
@@ -155,6 +159,15 @@ export default function Cobertura() {
           </ul>
         )}
       </div>
+      {removendo && (
+        <ConfirmarModal
+          titulo={`Tirar ${removendo.cidade} da cobertura de ${unidadeSel?.nome ?? 'unidade'}?`}
+          texto="Os leads dessa cidade que já estão na base continuam onde estão; a cidade só deixa de ser da unidade para as próximas importações. Dá para adicionar de novo depois."
+          rotuloConfirmar="Tirar da cobertura"
+          onConfirmar={() => removeCidade(removendo.id)}
+          onCancelar={() => setRemovendo(null)}
+        />
+      )}
     </div>
   )
 }

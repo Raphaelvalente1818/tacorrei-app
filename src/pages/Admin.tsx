@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  BarChart3, Building2, Users, MapPin, Target, Sun, Briefcase, Shield, MessageCircle, Wallet, SlidersHorizontal, Upload,
+  BarChart3, Building2, Users, MapPin, Target, Sun, Briefcase, Shield, MessageCircle, Wallet, SlidersHorizontal, Upload, History, Footprints,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import MetaDoMes from '../components/MetaDoMes'
@@ -14,6 +14,7 @@ import Premio from './admin/Premio'
 import ConfigUnidade from './admin/ConfigUnidade'
 import Metodo from './admin/Metodo'
 import ImportarBase from './admin/ImportarBase'
+import Trilha from './admin/Trilha'
 
 // ── Painel ───────────────────────────────────────────────────────────────────
 // Redesenho de 11/09 (PRD R3b): gestão e administração eram uma aba só. Agora:
@@ -26,8 +27,8 @@ import ImportarBase from './admin/ImportarBase'
 // A matriz de quem faz o quê está no PRD, seção 8; o banco aplica de novo.
 
 type Grupo = 'dia' | 'gestao' | 'admin'
-type SubGestao = 'meta' | 'producao' | 'equipe' | 'mensagens' | 'premio'
-type SubAdmin = 'unidades' | 'configurar' | 'cobertura' | 'metodo' | 'acessos' | 'importar'
+type SubGestao = 'meta' | 'producao' | 'equipe' | 'mensagens' | 'premio' | 'registro'
+type SubAdmin = 'unidades' | 'configurar' | 'cobertura' | 'metodo' | 'acessos' | 'importar' | 'trilha'
 
 const tabBase = 'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors'
 const tabOn = 'bg-brand text-[#04120a] border-brand'
@@ -73,6 +74,7 @@ export default function Admin() {
     { id: 'equipe', label: 'Equipe', icon: Users },
     { id: 'mensagens', label: 'Mensagens', icon: MessageCircle },
     { id: 'premio', label: 'Prêmio', icon: Wallet },
+    { id: 'registro', label: 'Registro', icon: History },
   ]
 
   const subsAdmin: { id: SubAdmin; label: string; icon: typeof Building2 }[] = [
@@ -82,6 +84,7 @@ export default function Admin() {
     { id: 'metodo', label: 'Método', icon: Target },
     { id: 'acessos', label: 'Acessos', icon: Users },
     { id: 'importar', label: 'Importar base', icon: Upload },
+    { id: 'trilha', label: 'Trilha', icon: Footprints },
   ]
 
   // Telas que são de UMA unidade e por isso mostram de qual.
@@ -157,6 +160,7 @@ export default function Admin() {
           {grupo === 'gestao' && subGestao === 'equipe' && <Acessos podeTudo={isAdmin} unidadeFixa={unidadeId} />}
           {grupo === 'gestao' && subGestao === 'mensagens' && unidadeId && <Mensagens unidadeId={unidadeId} />}
           {grupo === 'gestao' && subGestao === 'premio' && unidadeId && <Premio unidadeId={unidadeId} />}
+          {grupo === 'gestao' && subGestao === 'registro' && unidadeId && <Trilha modo="gestor" unidadeId={unidadeId} />}
 
           {grupo === 'admin' && isAdmin && subAdmin === 'unidades' && <Unidades podeEditar />}
           {grupo === 'admin' && isAdmin && subAdmin === 'configurar' && unidadeId && <ConfigUnidade unidadeId={unidadeId} />}
@@ -164,6 +168,7 @@ export default function Admin() {
           {grupo === 'admin' && isAdmin && subAdmin === 'metodo' && <Metodo />}
           {grupo === 'admin' && isAdmin && subAdmin === 'acessos' && <Acessos podeTudo />}
           {grupo === 'admin' && isAdmin && subAdmin === 'importar' && unidadeId && <ImportarBase unidadeId={unidadeId} nomeUnidade={nomeUnidade} />}
+          {grupo === 'admin' && isAdmin && subAdmin === 'trilha' && <Trilha modo="admin" unidadeId={unidadeAtiva ?? null} />}
         </>
       )}
     </div>
