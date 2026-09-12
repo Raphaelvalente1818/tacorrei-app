@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  BarChart3, Building2, Users, MapPin, Target, Sun, Briefcase, Shield, MessageCircle, Wallet, SlidersHorizontal,
+  BarChart3, Building2, Users, MapPin, Target, Sun, Briefcase, Shield, MessageCircle, Wallet, SlidersHorizontal, Upload,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import MetaDoMes from '../components/MetaDoMes'
@@ -13,6 +13,7 @@ import Mensagens from './admin/Mensagens'
 import Premio from './admin/Premio'
 import ConfigUnidade from './admin/ConfigUnidade'
 import Metodo from './admin/Metodo'
+import ImportarBase from './admin/ImportarBase'
 
 // ── Painel ───────────────────────────────────────────────────────────────────
 // Redesenho de 11/09 (PRD R3b): gestão e administração eram uma aba só. Agora:
@@ -26,7 +27,7 @@ import Metodo from './admin/Metodo'
 
 type Grupo = 'dia' | 'gestao' | 'admin'
 type SubGestao = 'meta' | 'producao' | 'equipe' | 'mensagens' | 'premio'
-type SubAdmin = 'unidades' | 'configurar' | 'cobertura' | 'metodo' | 'acessos'
+type SubAdmin = 'unidades' | 'configurar' | 'cobertura' | 'metodo' | 'acessos' | 'importar'
 
 const tabBase = 'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors'
 const tabOn = 'bg-brand text-[#04120a] border-brand'
@@ -80,13 +81,14 @@ export default function Admin() {
     { id: 'cobertura', label: 'Cobertura', icon: MapPin },
     { id: 'metodo', label: 'Método', icon: Target },
     { id: 'acessos', label: 'Acessos', icon: Users },
+    { id: 'importar', label: 'Importar base', icon: Upload },
   ]
 
   // Telas que são de UMA unidade e por isso mostram de qual.
   const porUnidade =
     grupo === 'dia' ||
     (grupo === 'gestao' && subGestao !== 'producao') ||
-    (grupo === 'admin' && subAdmin === 'configurar')
+    (grupo === 'admin' && (subAdmin === 'configurar' || subAdmin === 'importar'))
 
   return (
     <div>
@@ -161,6 +163,7 @@ export default function Admin() {
           {grupo === 'admin' && isAdmin && subAdmin === 'cobertura' && <Cobertura />}
           {grupo === 'admin' && isAdmin && subAdmin === 'metodo' && <Metodo />}
           {grupo === 'admin' && isAdmin && subAdmin === 'acessos' && <Acessos podeTudo />}
+          {grupo === 'admin' && isAdmin && subAdmin === 'importar' && unidadeId && <ImportarBase unidadeId={unidadeId} nomeUnidade={nomeUnidade} />}
         </>
       )}
     </div>
