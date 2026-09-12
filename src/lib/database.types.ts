@@ -162,6 +162,26 @@ export interface EquipeMembro {
 export interface Unidade {
   id: string
   nome: string
+  // Marca, endereço e os textos variáveis das mensagens (0085). Vêm do banco;
+  // o que estiver vazio cai no padrão do código (MENSAGEM_PADRAO em AuthContext).
+  marca?: string | null
+  endereco?: string | null
+  telefone?: string | null
+  msg_credencial?: string | null
+  msg_convite_vencido?: string | null
+  msg_convite_a_vencer?: string | null
+  msg_aviso_contrato?: string | null
+}
+
+// O que a mensagem de WhatsApp precisa saber da unidade, já com os padrões aplicados.
+export interface ConfigMensagem {
+  marca: string
+  endereco: string
+  telefone: string | null
+  credencial: string
+  conviteVencido: string
+  conviteAVencer: string
+  avisoContrato: string
 }
 
 // Placeholder mínimo para satisfazer o generic do supabase-js.

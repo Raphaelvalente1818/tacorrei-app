@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { EquipeMembro, Unidade } from './database.types'
+import type { ConfigMensagem, EquipeMembro, Unidade } from './database.types'
 
 const LS_UNIDADE = 'lacre.unidadeAtiva'
 
@@ -13,6 +13,8 @@ interface AuthState {
   // Unidades e a unidade "ativa" só fazem sentido para o admin, que fica acima das
   // unidades e escolhe qual quer visualizar. null = "Todas as unidades" (consolidado).
   unidades: Unidade[]
+  // Depois de salvar marca/mensagens na aba Unidade, recarrega sem relogar.
+  recarregarUnidades: () => Promise<void>
   unidadeAtiva: string | null
   setUnidadeAtiva: (id: string | null) => void
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>
@@ -70,19 +72,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => setMembro(data as EquipeMembro | null))
   }, [session?.user])
 
-  // Admin carrega a lista de unidades para alimentar o seletor.
-  useEffect(() => {
-    // Só o admin pleno escolhe unidade — o admin_unidade tem a dele fixa.
-    if (membro?.papel !== 'admin') {
+  // Todo mundo carrega as unidades que enxerga: o admin, todas (alimenta o seletor
+  // "Visualizando"); operadora e gestor, só a própria — a RLS já corta. Junto vêm
+  // marca, endereço e os textos das mensagens (0085), que antes eram um mapa fixo
+  // no código: unidade nova = cadastro, não deploy.
+  const recarregarUnidades = useCallback(async () => {
+    if (!membro) {
       setUnidades([])
       return
     }
-    supabase
+    const { data } = await supabase
       .from('unidades')
-      .select('id, nome')
+      .select('id, nome, marca, endereco, telefone, msg_credencial, msg_convite_vencido, msg_convite_a_vencer, msg_aviso_contrato')
       .order('nome')
-      .then(({ data }) => setUnidades((data as Unidade[]) ?? []))
-  }, [membro?.papel])
+    setUnidades((data as Unidade[]) ?? [])
+  }, [membro])
+
+  useEffect(() => {
+    recarregarUnidades()
+  }, [recarregarUnidades])
 
   async function signInWithPassword(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -101,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         membro,
         loading,
         unidades,
+        recarregarUnidades,
         unidadeAtiva,
         setUnidadeAtiva,
         signInWithPassword,
@@ -127,6 +136,43 @@ export function useFiltroUnidade(): string | null {
   // aqui é só para as telas não pedirem dado que viria vazio.
   if (membro?.papel === 'admin_unidade') return membro.unidade_id
   return null
+}
+
+// Os textos aprovados em 24/08 (quatro blocos). Ficam aqui como padrão: a unidade
+// que não mexeu em nada manda exatamente isto. A porta de saída e a estrutura não
+// são configuráveis — é o que protege o número.
+export const MENSAGEM_PADRAO: ConfigMensagem = {
+  // Marca e endereço não têm padrão de verdade: unidade sem cadastro assina com o
+  // próprio nome e a mensagem sai sem a linha do endereço.
+  marca: '',
+  endereco: '',
+  telefone: null,
+  credencial: 'Posto de ensaio credenciado pelo Inmetro',
+  conviteVencido: 'Venha aferir com a gente e já saia com tudo em dia.',
+  conviteAVencer: 'Venha aferir com a gente antes do prazo e já saia com tudo em dia.',
+  avisoContrato: 'Atendemos por ordem de chegada e cada veículo já sai com tudo em dia. Se preferirem trazer todos juntos, é só combinar.',
+}
+
+export function configMensagemDe(u: Unidade | null | undefined): ConfigMensagem {
+  return {
+    marca: u?.marca?.trim() || u?.nome || 'nosso posto',
+    endereco: u?.endereco?.trim() || '',
+    telefone: u?.telefone?.trim() || null,
+    credencial: u?.msg_credencial?.trim() || MENSAGEM_PADRAO.credencial,
+    conviteVencido: u?.msg_convite_vencido?.trim() || MENSAGEM_PADRAO.conviteVencido,
+    conviteAVencer: u?.msg_convite_a_vencer?.trim() || MENSAGEM_PADRAO.conviteAVencer,
+    avisoContrato: u?.msg_aviso_contrato?.trim() || MENSAGEM_PADRAO.avisoContrato,
+  }
+}
+
+// A configuração de mensagem de uma unidade, com os padrões aplicados. Devolve uma
+// função porque a ficha do lead só sabe a unidade depois de carregar o lead.
+export function useConfigMensagem(): (unidadeId: string | null | undefined) => ConfigMensagem {
+  const { unidades } = useAuth()
+  return useCallback(
+    (unidadeId: string | null | undefined) => configMensagemDe(unidades.find((u) => u.id === unidadeId)),
+    [unidades]
+  )
 }
 
 // Quem enxerga o painel Admin: o pleno e o da unidade (com abas reduzidas).

@@ -4,7 +4,8 @@ import {
   Upload, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
+import { useAuth, useConfigMensagem, useFiltroUnidade } from '../lib/AuthContext'
+import type { ConfigMensagem } from '../lib/database.types'
 import EmpresaModal, { type EmpresaEditavel } from '../components/EmpresaModal'
 import VeiculosEmpresaModal from '../components/VeiculosEmpresaModal'
 import ImportarEmpresasModal from '../components/ImportarEmpresasModal'
@@ -53,18 +54,7 @@ type EmpresaPainel = {
 
 type Veiculo = { id: string; placa: string | null; modelo: string | null; vence: string }
 
-const UNIDADE_SAO_BERNARDO = '265f0c74-123e-4886-9683-b70793c30b61'
-
-const MARCA_POR_UNIDADE: Record<string, { marca: string; endereco: string }> = {
-  [UNIDADE_SAO_BERNARDO]: {
-    marca: 'Tacorrei Tacógrafos',
-    endereco: 'Rua dos Feltrins, 1300, bairro Demarchi, São Bernardo/SP',
-  },
-}
-const MARCA_PADRAO = {
-  marca: 'Lacre Tacógrafos',
-  endereco: 'Av. dos Estados, 7050, Santo André/SP',
-}
+// Marca, endereço e o texto do aviso vêm do cadastro da unidade (0085).
 
 const MESES_PT = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -138,30 +128,32 @@ function montarAviso(
   empresa: EmpresaPainel,
   veiculos: Veiculo[],
   competencia: string,
+  cfg: ConfigMensagem,
   atendente?: string | null
 ): string {
-  const { marca, endereco } = MARCA_POR_UNIDADE[empresa.unidade_id] ?? MARCA_PADRAO
+  const { marca, endereco } = cfg
   const quem = atendente?.trim().split(/\s+/)[0]
   const eu = quem ? `Aqui é ${quem.slice(-1).toLowerCase() === 'a' ? 'a' : 'o'} ${quem}, da ${marca}` : `Aqui é da ${marca}`
   const lista = veiculos
     .map((v) => `• ${v.placa ?? '(sem placa)'} — vence ${fmtDia(v.vence)}`)
     .join('\n')
 
+  const onde = endereco ? `\nEstamos na ${endereco}` : ''
   return `${saudacao()}! ${eu}
-Posto de ensaio credenciado pelo Inmetro
+${cfg.credencial}
 
 Segue a relação dos veículos da ${empresa.nome} com o certificado do tacógrafo vencendo em ${rotuloCompetencia(competencia)}:
 
 ${lista}
 
-Atendemos por ordem de chegada e cada veículo já sai com tudo em dia. Se preferirem trazer todos juntos, é só combinar.
+${cfg.avisoContrato}
 
-Estou à disposição.
-Estamos na ${endereco}`
+Estou à disposição.${onde}`
 }
 
 export default function Empresas() {
   const { membro } = useAuth()
+  const configMensagem = useConfigMensagem()
   const filtroUnidade = useFiltroUnidade()
 
   // O padrão é o mês QUE VEM — é o que se avisa. As setas andam no calendário
@@ -222,7 +214,7 @@ export default function Empresas() {
     }
     const lista = (data as Veiculo[]) ?? []
     setVeiculos(lista)
-    setMensagem(montarAviso(empresa, lista, competencia, membro?.nome))
+    setMensagem(montarAviso(empresa, lista, competencia, configMensagem(empresa.unidade_id), membro?.nome))
     setAberta(empresa)
   }
 

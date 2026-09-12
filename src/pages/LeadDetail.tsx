@@ -5,9 +5,9 @@ import {
   MessageCircle, AlertTriangle, Ban, Trash2, CheckCircle2, Building2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../lib/AuthContext'
+import { useAuth, useConfigMensagem } from '../lib/AuthContext'
 import type {
-  Agendamento, Ligacao, LeadComEmpresa, VeiculoDaFrota,
+  Agendamento, ConfigMensagem, Ligacao, LeadComEmpresa, VeiculoDaFrota,
 } from '../lib/database.types'
 import {
   CANAL_CONTATO_LABEL,
@@ -24,30 +24,8 @@ import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
 
 const VALIDADE_ANOS = 2
 
-// Marca e endereço que aparecem nas mensagens de WhatsApp, por unidade.
-// A chave é o `unidades.id` do Supabase. Ao abrir uma unidade nova, basta
-// adicionar a linha dela aqui; quem não estiver no mapa cai no padrão abaixo.
-const UNIDADE_SANTO_ANDRE = '146237d6-5983-4986-b4bd-51f9e1d690c3'
-const UNIDADE_SAO_BERNARDO = '265f0c74-123e-4886-9683-b70793c30b61'
-
-type MarcaUnidade = { marca: string; endereco: string }
-
-const MARCA_PADRAO: MarcaUnidade = {
-  marca: 'Lacre Tacógrafos',
-  endereco: 'Av. dos Estados, 7050, Santo André/SP',
-}
-
-const MARCA_POR_UNIDADE: Record<string, MarcaUnidade> = {
-  [UNIDADE_SANTO_ANDRE]: MARCA_PADRAO,
-  [UNIDADE_SAO_BERNARDO]: {
-    marca: 'Tacorrei Tacógrafos',
-    endereco: 'Rua dos Feltrins, 1300, bairro Demarchi, São Bernardo/SP',
-  },
-}
-
-function marcaDoLead(lead: LeadComEmpresa): MarcaUnidade {
-  return MARCA_POR_UNIDADE[lead.unidade_id] ?? MARCA_PADRAO
-}
+// Marca, endereço e os textos variáveis da mensagem vêm do cadastro da unidade
+// (aba Unidade → Mensagens; 0085). `useConfigMensagem()` aplica os padrões.
 
 // Cliente da casa = a última aferição foi num posto do grupo (Tacorrei ou Lacre).
 // Para ele a mensagem é lembrete de fornecedor. Para quem aferiu em concorrente é
@@ -178,10 +156,11 @@ Se preferir, dá para trazer ${plural ? 'todos de uma vez' : 'os dois juntos'} �
 function montarMensagem(
   lead: LeadComEmpresa,
   info: { venc: Date; vencido: boolean } | null,
+  cfg: ConfigMensagem,
   atendente?: string | null,
   irmaos: VeiculoDaFrota[] = []
 ): string {
-  const { marca, endereco } = marcaDoLead(lead)
+  const { marca, endereco } = cfg
   const frota = lead.empresa
   const nome = primeiroNome(nomeDestino(lead))
   const abre = nome ? `${saudacao()}, ${nome}!` : `${saudacao()}!`
@@ -189,7 +168,7 @@ function montarMensagem(
   // Cabeçalho: saudação, quem assina e o credenciamento — nesta ordem, sempre.
   const cabecalho = `${abre}
 ${assinatura(atendente, marca)}
-Posto de ensaio credenciado pelo Inmetro`
+${cfg.credencial}`
 
   // "da placa ABC1D23" ou "do seu veículo" — evita concordância remendada no texto.
   const doVeiculo = lead.placa_veiculo ? `da placa ${lead.placa_veiculo}` : 'do seu veículo'
@@ -202,10 +181,10 @@ Posto de ensaio credenciado pelo Inmetro`
     ? `Se algum desses veículos não for mais de vocês, me avisa que eu retiro do cadastro.`
     : `Se esse veículo não for mais seu, me avisa que eu retiro do cadastro.`
 
+  // Unidade sem endereço cadastrado: a mensagem sai sem a última linha.
+  const onde = endereco ? `\n\nEstamos na ${endereco}` : ''
   const rodape = `${saida}
-Estou à sua disposição para qualquer dúvida.
-
-Estamos na ${endereco}`
+Estou à sua disposição para qualquer dúvida.${onde}`
 
   // Para quem já aferiu conosco, dizer isso muda a natureza da mensagem: deixa de
   // ser alguém desconhecido que sabe a placa dele e passa a ser o fornecedor dele.
@@ -240,7 +219,7 @@ ${rodape}`
 
     // Com o bloco da frota o convite já vem lá dentro ("trazer todos de uma
     // vez"); repetir "venha aferir" aqui soaria insistente.
-    const convite = extras ? '' : 'Venha aferir com a gente e já saia com tudo em dia.\n\n'
+    const convite = extras ? '' : `${cfg.conviteVencido}\n\n`
     return `${cabecalho}
 
 Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
@@ -249,7 +228,7 @@ ${convite}${rodape}`
   }
 
   if (info && !info.vencido) {
-    const convite = extras ? '' : 'Venha aferir com a gente antes do prazo e já saia com tudo em dia.\n\n'
+    const convite = extras ? '' : `${cfg.conviteAVencer}\n\n`
     return `${cabecalho}
 
 Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
@@ -272,6 +251,7 @@ export default function LeadDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { membro } = useAuth()
+  const configMensagem = useConfigMensagem()
   const [lead, setLead] = useState<LeadComEmpresa | null>(null)
   const [ligacoes, setLigacoes] = useState<Ligacao[]>([])
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
@@ -467,6 +447,7 @@ export default function LeadDetail() {
       montarMensagem(
         lead,
         vencimentoLead(lead.data_ultima_afericao),
+        configMensagem(lead.unidade_id),
         membro?.nome,
         irmaos.filter((v) => pre.includes(v.id))
       )
@@ -479,8 +460,8 @@ export default function LeadDetail() {
   useEffect(() => {
     if (!showWhats || !lead || msgEditada) return
     const irmaos = irmaosDaFrota(lead).filter((v) => incluidos.includes(v.id))
-    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao), membro?.nome, irmaos))
-  }, [incluidos, showWhats, lead, msgEditada, membro?.nome, irmaosDaFrota])
+    setWhatsMsg(montarMensagem(lead, vencimentoLead(lead.data_ultima_afericao), configMensagem(lead.unidade_id), membro?.nome, irmaos))
+  }, [incluidos, showWhats, lead, msgEditada, membro?.nome, irmaosDaFrota, configMensagem])
 
   // Abre o WhatsApp Web com a mensagem e registra o envio.
   //

@@ -100,7 +100,7 @@ export default function Layout() {
           {vePainelAdmin && (
             <NavLink to="/admin" className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}>
               <Shield size={17} strokeWidth={2.2} />
-              Admin
+              {isAdmin ? 'Gestão e admin' : 'Gestão'}
             </NavLink>
           )}
         </nav>
