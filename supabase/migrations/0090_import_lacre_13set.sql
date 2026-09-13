@@ -1,0 +1,36 @@
+-- 0090 — Importação da base Lacre (13/09/2026)
+--
+-- ATENÇÃO: este arquivo NÃO contém os dados dos clientes.
+-- Regra do projeto: placas e dados de frotas de clientes nunca vão para o repositório git.
+-- O conteúdo real foi aplicado direto no banco em 6 lotes, cada um um bloco `do $$ ... $$`
+-- que (a) personifica o Emerson, (b) monta o payload jsonb a partir da planilha
+-- `lacre inmetro13setembro.xlsx`, (c) chama `public.importar_base_empresas(v, u, 'prospecto')`
+-- e (d) registra a linha correspondente em `public.importacoes`.
+--
+-- Lotes aplicados em 13/09/2026 (nomes das migrations no Supabase):
+--   0090_import_lacre_sa_lote1   500 linhas   241 sem data
+--   0090_import_lacre_sa_lote2   500 linhas   228 sem data
+--   0090_import_lacre_sa_lote3   500 linhas   295 sem data
+--   0090_import_lacre_sa_lote4   500 linhas   209 sem data
+--   0090_import_lacre_sa_lote5   465 linhas   237 sem data
+--   0090_import_lacre_sbc_lote1  434 linhas   259 sem data
+--
+-- Resultado:
+--   Santo André  (146237d6-5983-4986-b4bd-51f9e1d690c3): +235 empresas, +2.465 placas
+--   São Bernardo (265f0c74-123e-4886-9683-b70793c30b61): +31 empresas,  +434 placas (Ribeirão Pires)
+--   Todas as empresas entraram como `prospecto`. Nenhuma linha ignorada, nenhuma atualizada
+--   (as 2.899 placas eram todas novas, conferido nos dois formatos de placa).
+--
+-- Conferência depois da importação:
+--   public.conferencia_contagens()  → 24/24 ok
+--   public.testes_pontuacao()       → 14/14 ok
+--   base_trabalhavel: Santo André 2.064 (269 nossos / 1.795 concorrência)
+--                     São Bernardo 5.938 (2.113 nossos / 3.825 concorrência)
+--
+-- Pendências conhecidas desta importação:
+--   * 5 empresas vieram truncadas em 100 placas na extração do RNTRC —
+--     PROTEGE (faltam ~1.086), DAVI ALVES (+23), SANTINI (+19), BRASMEG (+13), SEDA (+13).
+--   * O teto de R$ 1.000/mês de Santo André foi calibrado para uma base de 966 caminhões;
+--     com a base atual precisa ser revisto antes de 1º de outubro.
+
+select 'ver comentario acima — dados do cliente ficam fora do repositorio' as nota;
