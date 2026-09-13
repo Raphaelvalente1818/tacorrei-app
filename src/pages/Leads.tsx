@@ -16,7 +16,7 @@ type LeadNaFila = Caminhoneiro & {
   empresa_situacao?: 'contrato' | 'prospecto' | null
 }
 
-type FiltroLead = StatusLead | 'todos' | 'sem_tacografo'
+type FiltroLead = StatusLead | 'todos' | 'sem_tacografo' | 'sem_telefone'
 
 const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Todos', value: 'todos' },
@@ -28,6 +28,10 @@ const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Aferido', value: 'aferido' },
   { label: 'Recusado', value: 'recusado' },
   { label: 'Sem tacógrafo', value: 'sem_tacografo' },
+  // 0091 — o avesso da fila: quem não tem número para discar. Fica fora do dia a
+  // dia da operadora (era isso que fazia 17 de 84 ligações darem em nada) e visível
+  // para quem pode resolver: recaptura do RNTRC ou telefone da frota.
+  { label: 'Sem telefone', value: 'sem_telefone' },
 ]
 
 const PAGE_SIZE = 100
@@ -112,8 +116,15 @@ export default function Leads() {
   const { membro } = useAuth()
   const filtroUnidade = useFiltroUnidade()
   const isAdmin = membro?.papel === 'admin'
+  // "Sem telefone" é trabalho de gestão, não de operadora: ninguém liga para quem
+  // não tem número. Quem resolve é quem pede recaptura ou acha o telefone da frota.
+  const isGestao = isAdmin || membro?.papel === 'admin_unidade'
   // A fila "Sem tacógrafo" é só para o admin; a funcionária não vê esse público.
-  const filtros = FILTROS.filter((f) => f.value !== 'sem_tacografo' || isAdmin)
+  const filtros = FILTROS.filter(
+    (f) =>
+      (f.value !== 'sem_tacografo' || isAdmin) &&
+      (f.value !== 'sem_telefone' || isGestao),
+  )
   const [leads, setLeads] = useState<LeadNaFila[]>([])
   const [loading, setLoading] = useState(true)
   // Filtro, busca e página moram na URL: voltar da ficha (ou dar refresh, ou usar
@@ -426,6 +437,23 @@ export default function Leads() {
         </div>
       </div>
 
+      {/* 0091 — explica o que é esta lista, senão ela parece uma fila de trabalho
+          e alguém vai tentar ligar para ela. */}
+      {filtro === 'sem_telefone' && (
+        <div className="card p-5 mb-4 border-amber-500/40">
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
+            Fora da fila do dia
+          </p>
+          <p className="text-sm text-ink-6">
+            Estes caminhões estão na carteira, mas não há número para discar: o
+            telefone está em branco, é curto demais, ou já foi marcado como
+            inválido. Eles não aparecem para a operadora — não há o que ela faça.
+            Aqui é onde se decide o que fazer com eles: pedir recaptura no RNTRC,
+            achar o telefone pela frota, ou deixar quietos.
+          </p>
+        </div>
+      )}
+
       {/* Caminhão que está na base da unidade mas fora da janela — normalmente o
           walk-in que apareceu para aferir antes da hora. Some do caminho assim que
           a busca muda. Registrar por aqui evita a duplicata do "Novo lead". */}
@@ -515,7 +543,33 @@ export default function Leads() {
                         {lead.nome}
                       </Link>
                     </td>
-                    <td className="px-5 py-3 text-ink-6">{lead.telefone}</td>
+                    {/* 0091 — a operadora precisa saber ANTES de discar o que a
+                        espera do outro lado. Fixo do RNTRC quase nunca atende, e
+                        número já marcado como inválido não deveria ser tentado de
+                        novo sem alguém ter conseguido um número novo. */}
+                    <td className="px-5 py-3 text-ink-6">
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {lead.telefone || <span className="text-ink-4">sem telefone</span>}
+                        {lead.fone_cls === 10 && (
+                          <span
+                            className="badge bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            title="Telefone fixo do RNTRC. Costuma não atender — se tiver celular da frota, prefira ele."
+                          >
+                            fixo
+                          </span>
+                        )}
+                        {lead.telefone_invalido_em && (
+                          <span
+                            className="badge bg-rose-500/15 text-rose-300 border-rose-500/30"
+                            title={`Marcado como número inválido em ${new Date(
+                              lead.telefone_invalido_em,
+                            ).toLocaleDateString('pt-BR')}. Volta para a fila se alguém atender ou se o número for trocado.`}
+                          >
+                            inválido
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-ink-6">
                       {lead.cidade ? `${lead.cidade}${lead.uf ? '/' + lead.uf : ''}` : '—'}
                     </td>

@@ -69,6 +69,15 @@ export interface Caminhoneiro {
   autorizado_por: string | null
   // Frota a que o caminhão pertence. Null = autônomo, um dono um caminhão.
   empresa_id: string | null
+  // 0091 — a classe do telefone DESTE lead, calculada pelo banco:
+  // 11 = celular, 10 = fixo, 0 = não dá para discar.
+  fone_cls?: number
+  // 0091 — por onde dá para falar com ele hoje: o melhor entre o telefone do lead
+  // (se não estiver queimado) e o da frota. É por isto que a fila ordena.
+  fone?: number
+  // 0091 — quando alguém registrou "número inválido". Enquanto estiver preenchido
+  // o lead sai da fila do dia; volta sozinho se atenderem ou se o número mudar.
+  telefone_invalido_em: string | null
   created_at: string
   updated_at: string
 }
