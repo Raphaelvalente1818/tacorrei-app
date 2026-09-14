@@ -25,6 +25,10 @@ type UnidadeCfg = {
   intervalo_whatsapp_min: number
   cooldown_telefone_dias: number
   agrupamento_dias: number
+  // 0096 — a régua do gestor da unidade. Mais larga que a da operadora, muito
+  // mais curta que a base toda. Só o admin geral grava.
+  janela_gestor_dias: number
+  agrupamento_gestor_dias: number
   unidade_edita_premio: boolean
   suspensa_em: string | null
 }
@@ -73,7 +77,8 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
 
   const campos: (keyof UnidadeCfg)[] = [
     'nome', 'posto_afericao', 'posto_chave', 'marca', 'endereco', 'telefone', 'janela_dias', 'piso_dias',
-    'limite_whatsapp_dia', 'intervalo_whatsapp_min', 'cooldown_telefone_dias', 'agrupamento_dias', 'unidade_edita_premio',
+    'limite_whatsapp_dia', 'intervalo_whatsapp_min', 'cooldown_telefone_dias', 'agrupamento_dias',
+    'janela_gestor_dias', 'agrupamento_gestor_dias', 'unidade_edita_premio',
   ]
   const mudados = campos.filter((k) => u[k] !== orig[k])
 
@@ -112,7 +117,7 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
     await recarregarUnidades()
   }
 
-  const numInput = (k: 'limite_whatsapp_dia' | 'intervalo_whatsapp_min' | 'cooldown_telefone_dias' | 'agrupamento_dias', rotulo: string, ajuda: string) => (
+  const numInput = (k: 'limite_whatsapp_dia' | 'intervalo_whatsapp_min' | 'cooldown_telefone_dias' | 'agrupamento_dias' | 'janela_gestor_dias' | 'agrupamento_gestor_dias', rotulo: string, ajuda: string) => (
     <div>
       <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-4 mb-1">{rotulo}</label>
       <input
@@ -192,6 +197,24 @@ export default function ConfigUnidade({ unidadeId }: { unidadeId: string }) {
           {numInput('intervalo_whatsapp_min', 'Intervalo entre mensagens (min)', 'Espera mínima entre dois envios.')}
           {numInput('cooldown_telefone_dias', 'Mesmo telefone (dias)', 'Um número não recebe outra mensagem antes disso.')}
           {numInput('agrupamento_dias', 'Agrupamento da frota (dias)', 'Irmãos que vencem dentro deste prazo entram pré-marcados na mesma mensagem.')}
+        </div>
+      </div>
+
+      {/* 0096 — o que o dono da unidade enxerga. A operadora tem a janela acima;
+          o gestor tem esta, e ele mesmo não pode mexer nela. */}
+      <div className="card p-5 space-y-4">
+        <h2 className="text-sm font-extrabold text-ink flex items-center gap-2">
+          <SlidersHorizontal size={16} className="text-brand" /> Régua do gestor da unidade
+        </h2>
+        <p className="text-[11px] text-ink-4 -mt-2">
+          O dono da unidade vê a frota que tem algo vencendo dentro da janela abaixo —
+          e, dessa frota, só os caminhões que vencem dentro do agrupamento. O resto da
+          base continua no banco, contado no Panorama do ano, mas sem ficha alcançável.
+          Estes dois campos são gravados só pelo admin geral.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {numInput('janela_gestor_dias', 'Janela do gestor (dias)', 'Uma frota entra na vista dele quando tem algum caminhão vencendo nesse prazo.')}
+          {numInput('agrupamento_gestor_dias', 'Agrupamento do gestor (dias)', 'Até onde vai o caminhão que entra de carona na frota. Sem isso, um irmão vencendo em novembro abriria fichas de 2028.')}
         </div>
       </div>
 

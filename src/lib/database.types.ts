@@ -184,6 +184,12 @@ export interface EquipeMembro {
 export interface Unidade {
   id: string
   nome: string
+  // 0096 — a régua do gestor da unidade: quantos dias à frente ele enxerga
+  // (janela_gestor_dias, padrão 60) e até onde vai o caminhão que entra de
+  // carona na frota (agrupamento_gestor_dias, padrão 365). A operadora continua
+  // com janela_dias/piso_dias. Só o admin geral grava estes dois.
+  janela_gestor_dias?: number
+  agrupamento_gestor_dias?: number
   // Marca, endereço e os textos variáveis das mensagens (0085). Vêm do banco;
   // o que estiver vazio cai no padrão do código (MENSAGEM_PADRAO em AuthContext).
   marca?: string | null

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Users, PhoneCall, CalendarClock, CheckCircle2, Trophy } from 'lucide-react'
+import { Users, PhoneCall, CalendarClock, CheckCircle2, Trophy, CalendarRange } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useFiltroUnidade } from '../lib/AuthContext'
+import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import type { StatusLead } from '../lib/database.types'
 
 const FUNIL_ORDEM: Array<{ status: StatusLead; label: string }> = [
@@ -159,6 +159,27 @@ async function buscarConversao(unidadeId: string | null): Promise<Conversao> {
   return data as Conversao
 }
 
+// 0096b — o panorama do ano. A régua do gestor mostra a ele só as fichas que
+// estão em jogo agora (a frota com algo vencendo nos próximos 60 dias). Isso é
+// proteção da base, mas cega ele quanto ao tamanho do que tem pela frente — e
+// esse tamanho é justamente o que faz valer a pena investir na operação. Aqui
+// ele vê a conta do ano inteiro, mês a mês, e nenhum caminhão: sem nome, sem
+// placa, sem telefone. Número não se disca.
+type Panorama = { meses: { mes: string; total: number }[]; total: number }
+
+async function buscarPanorama(unidadeId: string | null): Promise<Panorama> {
+  const { data, error } = await supabase.rpc('panorama_do_ano', { p_unidade: unidadeId })
+  if (error || !data) return { meses: [], total: 0 }
+  return data as Panorama
+}
+
+// '2026-10' → 'out/26'
+function rotuloMes(mes: string): string {
+  const [ano, m] = mes.split('-')
+  const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+  return `${nomes[Number(m) - 1]}/${ano.slice(2)}`
+}
+
 // Poucos casos ainda: uma casa decimal abaixo de 10%, nenhuma acima.
 function pct(parte: number, todo: number): string {
   if (todo === 0) return '—'
@@ -168,10 +189,13 @@ function pct(parte: number, todo: number): string {
 
 export default function Dashboard() {
   const filtroUnidade = useFiltroUnidade()
+  const { membro } = useAuth()
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [porStatus, setPorStatus] = useState<Record<string, number>>({})
   const [conv, setConv] = useState<Conversao>(CONVERSAO_VAZIA)
+  const [panorama, setPanorama] = useState<Panorama>({ meses: [], total: 0 })
+  const isGestao = membro?.papel === 'admin' || membro?.papel === 'admin_unidade'
 
   useEffect(() => {
     // Este effect roda mais de uma vez: no primeiro render ainda não sabemos quem
@@ -184,9 +208,10 @@ export default function Dashboard() {
     let cancelado = false
     ;(async () => {
       setLoading(true)
-      const [c, k] = await Promise.all([
+      const [c, k, p] = await Promise.all([
         buscarContagens(filtroUnidade),
         buscarConversao(filtroUnidade),
+        buscarPanorama(filtroUnidade),
       ])
       if (cancelado) return
       const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
@@ -195,6 +220,7 @@ export default function Dashboard() {
       setTotal(Number(c.total ?? 0))
       setPorStatus(map)
       setConv(k)
+      setPanorama(p)
       setLoading(false)
     })()
     return () => {
@@ -212,6 +238,7 @@ export default function Dashboard() {
   const agendados = porStatus['agendado'] ?? 0
   const aferidos = porStatus['aferido'] ?? 0
   const funil = FUNIL_ORDEM.map(({ status, label }) => ({ label, total: porStatus[status] ?? 0 }))
+  const meses = panorama.meses.map((m) => ({ label: rotuloMes(m.mes), total: m.total }))
 
   return (
     <div>
@@ -324,6 +351,47 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Panorama do ano (0096b). O que a unidade tem pela frente, em número.
+              A fila entrega só quem está em jogo agora; este quadro conta o resto
+              sem mostrar ninguém. */}
+          {isGestao && meses.length > 0 && (
+            <div className="card p-5 mt-6">
+              <div className="flex items-baseline justify-between mb-1 gap-4">
+                <h2 className="text-sm font-extrabold text-ink flex items-center gap-2">
+                  <CalendarRange size={16} className="text-brand" /> Panorama do ano
+                </h2>
+                <span className="text-2xl font-extrabold text-ink">
+                  {panorama.total.toLocaleString('pt-BR')}
+                </span>
+              </div>
+              <p className="text-xs text-ink-4 mb-4">
+                Caminhões que vencem nos próximos doze meses. A fila do dia entrega
+                quem já dá para trabalhar; o resto aparece aqui como conta, e chega
+                na fila no mês dele.
+              </p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={meses} margin={{ left: 0, right: 8, top: 12 }}>
+                  <CartesianGrid vertical={false} stroke="#232c40" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: '#93a0b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#93a0b8' }} axisLine={false} tickLine={false} width={36} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #232c40', background: '#141b2a', color: '#f3f6fb', fontSize: 13 }}
+                  />
+                  <Bar dataKey="total" fill="#3f57ff" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="total" position="top" style={{ fill: '#93a0b8', fontWeight: 600, fontSize: 11 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </>
       )}
     </div>
