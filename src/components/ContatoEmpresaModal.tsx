@@ -14,6 +14,11 @@ import { CANAL_CONTATO_LABEL, RESULTADO_LIGACAO_LABEL } from '../lib/status'
 // Não há WhatsApp aqui de propósito: a cota diária, o intervalo entre envios e
 // a trava de telefone repetido moram na ficha do lead. Um disparo por empresa
 // passaria por fora de tudo isso.
+//
+// 14/09 (noite) — os dois campos nascem VAZIOS, pelo mesmo motivo da ficha do lead: campo
+// preenchido se lê como campo respondido. Aqui o estrago seria maior — um clique
+// distraído marca a frota INTEIRA como "conversamos", e "Recusou" tira todas as
+// placas dela da fila de uma vez.
 
 const CANAIS: CanalContato[] = ['ligacao_ativa', 'ligacao_passiva']
 
@@ -52,16 +57,22 @@ export default function ContatoEmpresaModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [canal, setCanal] = useState<CanalContato>('ligacao_ativa')
-  const [resultado, setResultado] = useState<ResultadoLigacao>('atendeu')
+  const [canal, setCanal] = useState<CanalContato | ''>('')
+  const [resultado, setResultado] = useState<ResultadoLigacao | ''>('')
   const [notas, setNotas] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   const fone = telefoneLimpo(empresa.telefone)
 
+  const completo = canal !== '' && resultado !== ''
+
   async function salvar(e: FormEvent) {
     e.preventDefault()
+    if (!completo) {
+      setErro('Escolha o tipo de contato e o resultado.')
+      return
+    }
     setSalvando(true)
     setErro(null)
 
@@ -118,9 +129,12 @@ export default function ContatoEmpresaModal({
             </label>
             <select
               value={canal}
-              onChange={(e) => setCanal(e.target.value as CanalContato)}
-              className="w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card"
+              onChange={(e) => setCanal(e.target.value as CanalContato | '')}
+              className={`w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card ${
+                canal === '' ? 'text-ink-4' : ''
+              }`}
             >
+              <option value="">Selecione…</option>
               {CANAIS.map((c) => (
                 <option key={c} value={c}>
                   {CANAL_CONTATO_LABEL[c]}
@@ -135,9 +149,12 @@ export default function ContatoEmpresaModal({
             </label>
             <select
               value={resultado}
-              onChange={(e) => setResultado(e.target.value as ResultadoLigacao)}
-              className="w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card"
+              onChange={(e) => setResultado(e.target.value as ResultadoLigacao | '')}
+              className={`w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card ${
+                resultado === '' ? 'text-ink-4' : ''
+              }`}
             >
+              <option value="">Selecione…</option>
               {RESULTADOS.map((r) => (
                 <option key={r} value={r}>
                   {RESULTADO_LIGACAO_LABEL[r]}
@@ -145,7 +162,9 @@ export default function ContatoEmpresaModal({
               ))}
             </select>
             <p className="text-xs text-ink-4 mt-1">
-              As placas ainda em aberto {EFEITO[resultado]}.
+              {resultado === ''
+                ? 'Escolha o resultado. Aparece aqui o que acontece com as placas da frota.'
+                : `As placas ainda em aberto ${EFEITO[resultado]}.`}
             </p>
           </div>
 
@@ -166,8 +185,8 @@ export default function ContatoEmpresaModal({
 
           <button
             type="submit"
-            disabled={salvando}
-            className="w-full py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-d transition-colors disabled:opacity-60"
+            disabled={salvando || !completo}
+            className="w-full py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-d transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {salvando ? 'Registrando…' : 'Registrar contato com a empresa'}
           </button>

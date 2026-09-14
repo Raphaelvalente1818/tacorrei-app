@@ -16,6 +16,15 @@ import ConfirmarModal from './ConfirmarModal'
 // O WhatsApp de propósito NÃO é acionado por aqui: o envio tem seis travas (cota do dia,
 // intervalo, cooldown por telefone, relação) e foi mensagem fora de trava que derrubou o
 // número em 28/08. "Autorizou mensagem" apenas LIBERA o botão; quem envia é ela, na ficha.
+//
+// 14/09 (noite) — OS DOIS CAMPOS NASCEM VAZIOS. Eles vinham preenchidos com "Ligação feita" e
+// "Atendeu — conversamos", e o Emerson apontou o efeito em 14/09: a ficha dava a impressão
+// de que a ligação já tinha sido feita e de que a pessoa já tinha atendido. É a lição 21
+// (cor é estado, não ação) noutro lugar — campo preenchido se lê como campo respondido.
+// Aqui é pior que cosmético: um clique distraído em "Registrar contato" gravava uma
+// conversa que nunca existiu, e conversa que não existiu suja a conversão por canal, a
+// atribuição do ponto (contato nos 45 dias antes da aferição) e a contagem de Trabalhados.
+// O formulário não tem palpite sobre o que aconteceu: quem sabe é ela.
 
 type Desfecho = {
   valor: ResultadoLigacao
@@ -107,18 +116,22 @@ export default function RegistrarLigacaoForm({
   // agendamento quando ela marca "Agendou a aferição".
   onSaved: (novoStatus: StatusLead, resultado: ResultadoLigacao) => void
 }) {
-  const [canal, setCanal] = useState<CanalContato>('ligacao_ativa')
-  const [valor, setValor] = useState<ResultadoLigacao>('atendeu')
+  // Vazio de propósito: o formulário não chuta o que aconteceu na ligação.
+  const [canal, setCanal] = useState<CanalContato | ''>('')
+  const [valor, setValor] = useState<ResultadoLigacao | ''>('')
   const [notas, setNotas] = useState('')
   const [dataAfericao, setDataAfericao] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
 
-  const desfecho = DESFECHOS.find((d) => d.valor === valor) ?? DESFECHOS[0]
+  // Pode ser undefined enquanto ela não escolher — tudo que usa isso testa antes.
+  const desfecho = DESFECHOS.find((d) => d.valor === valor)
+  const completo = canal !== '' && desfecho !== undefined
   const hoje = new Date().toISOString().slice(0, 10)
 
   async function gravar() {
+    if (!completo || !desfecho) return
     setSaving(true)
     setError(null)
     const { error: err } = await supabase.rpc('registrar_contato', {
@@ -136,12 +149,19 @@ export default function RegistrarLigacaoForm({
     }
     setNotas('')
     setDataAfericao('')
-    onSaved(desfecho.status, valor)
+    // Volta ao estado neutro: o próximo contato é outro contato.
+    setCanal('')
+    setValor('')
+    onSaved(desfecho.status, desfecho.valor)
   }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!desfecho || canal === '') {
+      setError('Escolha o tipo de contato e o que aconteceu.')
+      return
+    }
     if (desfecho.pedeData && !dataAfericao) {
       setError('Informe a data em que ele aferiu.')
       return
@@ -162,9 +182,12 @@ export default function RegistrarLigacaoForm({
           </label>
           <select
             value={canal}
-            onChange={(e) => setCanal(e.target.value as CanalContato)}
-            className="w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card"
+            onChange={(e) => setCanal(e.target.value as CanalContato | '')}
+            className={`w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card ${
+              canal === '' ? 'text-ink-4' : ''
+            }`}
           >
+            <option value="">Selecione…</option>
             {CANAIS.map((c) => (
               <option key={c} value={c}>
                 {CANAL_CONTATO_LABEL[c]}
@@ -179,9 +202,12 @@ export default function RegistrarLigacaoForm({
           </label>
           <select
             value={valor}
-            onChange={(e) => setValor(e.target.value as ResultadoLigacao)}
-            className="w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card"
+            onChange={(e) => setValor(e.target.value as ResultadoLigacao | '')}
+            className={`w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none bg-card ${
+              valor === '' ? 'text-ink-4' : ''
+            }`}
           >
+            <option value="">Selecione…</option>
             {DESFECHOS.map((d) => (
               <option key={d.valor} value={d.valor}>
                 {d.label}
@@ -189,11 +215,16 @@ export default function RegistrarLigacaoForm({
             ))}
           </select>
           {/* O efeito fica à vista ANTES de salvar: é assim que ela aprende a regra
-              sem decorar manual, e é o que evita o clique errado. */}
-          <p className="text-xs text-ink-4 mt-1.5 leading-relaxed">{desfecho.efeito}</p>
+              sem decorar manual, e é o que evita o clique errado. Sem escolha, aqui
+              não vai efeito nenhum — só a instrução. */}
+          <p className="text-xs text-ink-4 mt-1.5 leading-relaxed">
+            {desfecho
+              ? desfecho.efeito
+              : 'Escolha o que aconteceu. Antes de salvar, aparece aqui o que o sistema vai fazer.'}
+          </p>
         </div>
 
-        {desfecho.pedeData && (
+        {desfecho?.pedeData && (
           <div>
             <label className="block text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
               Quando ele aferiu
@@ -225,14 +256,14 @@ export default function RegistrarLigacaoForm({
 
         <button
           type="submit"
-          disabled={saving}
-          className="w-full py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-d transition-colors disabled:opacity-60"
+          disabled={saving || !completo}
+          className="w-full py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-d transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {saving ? 'Salvando…' : 'Registrar contato'}
         </button>
       </form>
 
-      {confirmando && (
+      {confirmando && desfecho && (
         <ConfirmarModal
           titulo={desfecho.label}
           texto={desfecho.efeito}
