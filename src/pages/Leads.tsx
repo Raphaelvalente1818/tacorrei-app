@@ -16,7 +16,7 @@ type LeadNaFila = Caminhoneiro & {
   empresa_situacao?: 'contrato' | 'prospecto' | null
 }
 
-type FiltroLead = StatusLead | 'todos' | 'sem_tacografo' | 'sem_telefone'
+type FiltroLead = StatusLead | 'todos' | 'sem_tacografo' | 'sem_telefone' | 'fora_de_area'
 
 const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Todos', value: 'todos' },
@@ -32,6 +32,9 @@ const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   // dia da operadora (era isso que fazia 17 de 84 ligações darem em nada) e visível
   // para quem pode resolver: recaptura do RNTRC ou telefone da frota.
   { label: 'Sem telefone', value: 'sem_telefone' },
+  // 0095 — o dono afere este caminhão em outra praça. Não é alvo, mas fica visível
+  // para a gestão poder desfazer e para medir quanto da base é de fora.
+  { label: 'Fora de área', value: 'fora_de_area' },
 ]
 
 const PAGE_SIZE = 100
@@ -123,7 +126,8 @@ export default function Leads() {
   const filtros = FILTROS.filter(
     (f) =>
       (f.value !== 'sem_tacografo' || isAdmin) &&
-      (f.value !== 'sem_telefone' || isGestao),
+      (f.value !== 'sem_telefone' || isGestao) &&
+      (f.value !== 'fora_de_area' || isGestao),
   )
   const [leads, setLeads] = useState<LeadNaFila[]>([])
   const [loading, setLoading] = useState(true)
@@ -439,6 +443,20 @@ export default function Leads() {
 
       {/* 0091 — explica o que é esta lista, senão ela parece uma fila de trabalho
           e alguém vai tentar ligar para ela. */}
+      {filtro === 'fora_de_area' && (
+        <div className="card p-5 mb-4 border-amber-500/40">
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
+            Fora do nosso alvo
+          </p>
+          <p className="text-sm text-ink-6">
+            Caminhões que o dono afere em outra praça — ele pode ter veículo aqui e
+            veículo lá, e cada um afere onde roda. A operadora marcou isso na ligação e
+            eles saíram da fila. Se algum foi marcado por engano, abra a ficha e clique
+            em “voltar para a fila”.
+          </p>
+        </div>
+      )}
+
       {filtro === 'sem_telefone' && (
         <div className="card p-5 mb-4 border-amber-500/40">
           <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
@@ -556,6 +574,14 @@ export default function Leads() {
                             title="Telefone fixo do RNTRC. Costuma não atender — se tiver celular da frota, prefira ele."
                           >
                             fixo
+                          </span>
+                        )}
+                        {lead.fora_de_area_em && (
+                          <span
+                            className="badge bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            title="Roda e afere em outra praça — fora do nosso alvo"
+                          >
+                            fora de área
                           </span>
                         )}
                         {lead.telefone_invalido_em && (

@@ -22,6 +22,11 @@ export type ResultadoLigacao =
   | 'reagendar'
   | 'whatsapp_enviado'
   | 'aferido'
+  // 0095 — dois desfechos que a operadora ouve no telefone e que mudam o lead:
+  // 'aferiu_fora'  → ele já aferiu no concorrente; grava data e posto, sai da fila 2 anos.
+  // 'fora_de_area' → este caminhão roda e afere em outra praça; não é nosso alvo.
+  | 'aferiu_fora'
+  | 'fora_de_area'
   // Colhido na ligação: "pode me mandar no WhatsApp?". É o consentimento que
   // libera a mensagem para quem é cliente de concorrente.
   | 'autorizou_whatsapp'
@@ -78,6 +83,10 @@ export interface Caminhoneiro {
   // 0091 — quando alguém registrou "número inválido". Enquanto estiver preenchido
   // o lead sai da fila do dia; volta sozinho se atenderem ou se o número mudar.
   telefone_invalido_em: string | null
+  // 0095 — este caminhão roda e afere em outra praça: sai da fila, mas continua
+  // visível no filtro "Fora de área". Desmarcar é `desmarcar_fora_de_area`.
+  fora_de_area_em: string | null
+  fora_de_area_por?: string | null
   created_at: string
   updated_at: string
 }

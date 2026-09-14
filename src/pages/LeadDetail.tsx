@@ -257,6 +257,8 @@ export default function LeadDetail() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [loading, setLoading] = useState(true)
   const [showAgendar, setShowAgendar] = useState(false)
+  // 0095 — confirmação para trazer de volta um caminhão marcado como fora de área.
+  const [confirmarVoltaArea, setConfirmarVoltaArea] = useState(false)
   const [showAferido, setShowAferido] = useState(false)
 
   // edição inline
@@ -357,6 +359,21 @@ export default function LeadDetail() {
   // "Pode me mandar no WhatsApp?" — dito na ligação. É o que libera a mensagem
   // para quem é cliente de concorrente. Ligação atendida não basta; a permissão
   // precisa ser explícita, e fica gravada com data e autor.
+  // 0095 — desfaz o "fora de área". Fica registrado em `correcoes` com o motivo,
+  // como toda correção desde a 0088.
+  async function voltarParaAFila(motivo: string) {
+    const { error: err } = await supabase.rpc('desmarcar_fora_de_area', {
+      p_lead: id,
+      p_motivo: motivo || null,
+    })
+    setConfirmarVoltaArea(false)
+    if (err) {
+      setAlerta(err.message)
+      return
+    }
+    carregar()
+  }
+
   async function marcarAutorizacao(autorizou: boolean) {
     if (!lead) return
     const { error } = await supabase.rpc('registrar_autorizacao', {
@@ -695,6 +712,23 @@ export default function LeadDetail() {
                   Última aferição: {lead.posto_afericao}
                 </span>
               )}
+              {/* 0095 — este caminhão roda e afere em outra praça. Sai da fila, mas o
+                  selo fica à vista com o desfazer do lado: se marcarem errado, quem
+                  abrir a ficha vê na hora por que ele sumiu do dia a dia. */}
+              {lead.fora_de_area_em && (
+                <span className="inline-flex items-center gap-2">
+                  <span className="badge bg-amber-500/15 text-amber-300 border-amber-500/30">
+                    Fora de área
+                  </span>
+                  <button
+                    onClick={() => setConfirmarVoltaArea(true)}
+                    className="text-xs font-bold text-ink-4 hover:text-amber-200 underline underline-offset-2"
+                    title="Trazer este caminhão de volta para a fila"
+                  >
+                    voltar para a fila
+                  </button>
+                </span>
+              )}
             </div>
 
             {/* Frota. Sem isto a operadora não teria como saber que existe irmão
@@ -867,10 +901,13 @@ export default function LeadDetail() {
                   sai de cena e entra o de autorização. A operadora liga, e só marca
                   aqui se ele disser que pode mandar. Foi a mensagem sem relação que
                   derrubou o número em 28/08 — 16 das 20 daquele dia. */}
+              {/* 0095 — botão NEUTRO. Antes era verde-água, e o Emerson leu como
+                  "já autorizado". Cor aqui é estado, não ação: quando ele autoriza,
+                  este botão some e entra o selo "Autorizou" ao lado do status. */}
               {!podeReceberMensagem(lead) && (
                 <button
                   onClick={() => marcarAutorizacao(true)}
-                  className="flex items-center gap-1.5 border border-teal-500/30 bg-teal-500/10 text-teal-300 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-teal-500/20 transition-colors"
+                  className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-white/5 transition-colors"
                   title="Marque depois de ligar, se ele disser que pode mandar mensagem"
                 >
                   <Phone size={16} /> Liguei — autorizou mensagem
@@ -919,14 +956,28 @@ export default function LeadDetail() {
                 <CalendarPlus size={16} /> Agendar aferição
               </button>
               {/* Fecha o ciclo: grava a data do serviço em `data_ultima_afericao`,
-                  o lead sai da fila e volta sozinho daqui a 2 anos. */}
-              <button
-                onClick={() => setShowAferido(true)}
-                className="flex items-center gap-1.5 border border-lucro/40 bg-lucro/10 text-lucro text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-lucro/20 transition-colors"
-                title="Registrar que a aferição foi feita"
-              >
-                <CheckCircle2 size={16} /> Aferido
-              </button>
+                  o lead sai da fila e volta sozinho daqui a 2 anos.
+                  0095 — só fica ACESO depois que a aferição existe, e aí mostra a data.
+                  Antes era verde o tempo todo e parecia já marcado. */}
+              {lead.status === 'aferido' ? (
+                <span
+                  className="flex items-center gap-1.5 border border-lucro/40 bg-lucro/10 text-lucro text-sm font-bold px-3.5 py-2 rounded-xl"
+                  title="Aferição já registrada. Para corrigir, use o histórico de contatos."
+                >
+                  <CheckCircle2 size={16} /> Aferido
+                  {lead.data_ultima_afericao && (
+                    <> em {new Date(lead.data_ultima_afericao + 'T12:00:00').toLocaleDateString('pt-BR')}</>
+                  )}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setShowAferido(true)}
+                  className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-white/5 transition-colors"
+                  title="Registrar que a aferição foi feita"
+                >
+                  <CheckCircle2 size={16} /> Aferido
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -939,10 +990,13 @@ export default function LeadDetail() {
             <h2 className="text-sm font-extrabold text-ink mb-3">Registrar contato</h2>
             <RegistrarLigacaoForm
               caminhoneiroId={lead.id}
-              operadorId={membro?.user_id}
-              onSaved={(novoStatus) => {
+              onSaved={(novoStatus, resultado) => {
                 setLead((prev) => (prev ? { ...prev, status: novoStatus } : prev))
                 carregar()
+                // 0095 — o desfecho aciona o passo seguinte sozinho: quem agendou na
+                // ligação cai direto na tela de marcar dia e hora, sem ter de achar
+                // o botão "Agendar aferição" no topo.
+                if (resultado === 'agendou') setShowAgendar(true)
               }}
             />
           </div>
@@ -1188,6 +1242,17 @@ export default function LeadDetail() {
           motivoObrigatorio
           onConfirmar={(motivo) => desfazerAfericao(motivo)}
           onCancelar={() => setConfirmacao(null)}
+        />
+      )}
+      {confirmarVoltaArea && (
+        <ConfirmarModal
+          titulo="Trazer de volta para a fila?"
+          texto={'Este caminhão foi marcado como "roda em outra praça" e por isso saiu da fila. Ele volta a aparecer para a operadora normalmente.\n\nFica registrado quem trouxe de volta e por quê.'}
+          rotuloConfirmar="Voltar para a fila"
+          perigo={false}
+          pedirMotivo
+          onConfirmar={(motivo) => voltarParaAFila(motivo)}
+          onCancelar={() => setConfirmarVoltaArea(false)}
         />
       )}
     </div>

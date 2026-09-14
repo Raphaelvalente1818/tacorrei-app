@@ -96,11 +96,15 @@ function StatTile({
   label,
   value,
   accent,
+  hint,
 }: {
   icon: typeof Users
   label: string
   value: number
   accent: string
+  // 0094 — linha de baixo que explica do que o número é feito. Existe por causa do
+  // cartão "Trabalhados": sem ela, 207 se lê como 207 conversas.
+  hint?: string
 }) {
   return (
     <div className="card p-5">
@@ -114,6 +118,7 @@ function StatTile({
         <span className="text-xs font-bold uppercase tracking-wide text-ink-4">{label}</span>
       </div>
       <div className="text-2xl font-extrabold text-ink">{value}</div>
+      {hint && <div className="text-xs text-ink-4 mt-1 leading-snug">{hint}</div>}
     </div>
   )
 }
@@ -129,11 +134,44 @@ async function buscarContagens(unidadeId: string | null): Promise<Contagens> {
   return data as Contagens
 }
 
+// 0094 — conversão separada por canal. Mensagem enviada e ligação atendida têm
+// conversões muito diferentes; a média das duas não responde a pergunta "qual canal
+// traz caminhão?". Os grupos se sobrepõem (`ambos`), então as taxas não somam.
+type Canal = { alcancados: number; aferiram: number }
+type Conversao = {
+  mensagem: Canal
+  ligacao: Canal
+  ambos: number
+  veio_sozinho: number
+  aferidos_total: number
+}
+const CONVERSAO_VAZIA: Conversao = {
+  mensagem: { alcancados: 0, aferiram: 0 },
+  ligacao: { alcancados: 0, aferiram: 0 },
+  ambos: 0,
+  veio_sozinho: 0,
+  aferidos_total: 0,
+}
+
+async function buscarConversao(unidadeId: string | null): Promise<Conversao> {
+  const { data, error } = await supabase.rpc('conversao_por_canal', { p_unidade: unidadeId })
+  if (error || !data) return CONVERSAO_VAZIA
+  return data as Conversao
+}
+
+// Poucos casos ainda: uma casa decimal abaixo de 10%, nenhuma acima.
+function pct(parte: number, todo: number): string {
+  if (todo === 0) return '—'
+  const t = (parte / todo) * 100
+  return `${(t >= 10 ? t.toFixed(0) : t.toFixed(1)).replace('.', ',')}%`
+}
+
 export default function Dashboard() {
   const filtroUnidade = useFiltroUnidade()
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [porStatus, setPorStatus] = useState<Record<string, number>>({})
+  const [conv, setConv] = useState<Conversao>(CONVERSAO_VAZIA)
 
   useEffect(() => {
     // Este effect roda mais de uma vez: no primeiro render ainda não sabemos quem
@@ -146,13 +184,17 @@ export default function Dashboard() {
     let cancelado = false
     ;(async () => {
       setLoading(true)
-      const c = await buscarContagens(filtroUnidade)
+      const [c, k] = await Promise.all([
+        buscarContagens(filtroUnidade),
+        buscarConversao(filtroUnidade),
+      ])
       if (cancelado) return
       const statuses: StatusLead[] = ['novo', 'mensagem_enviada', 'contatado', 'agendado', 'aferido']
       const map: Record<string, number> = {}
       statuses.forEach((s) => (map[s] = Number(c[s] ?? 0)))
       setTotal(Number(c.total ?? 0))
       setPorStatus(map)
+      setConv(k)
       setLoading(false)
     })()
     return () => {
@@ -160,18 +202,15 @@ export default function Dashboard() {
     }
   }, [filtroUnidade])
 
-  const contatados = total - (porStatus['novo'] ?? 0)
+  // "Trabalhados" = tudo que saiu de Novo. NÃO é "conversou": em São Bernardo eram
+  // 207, dos quais 175 só receberam uma mensagem e 11 realmente falaram com a gente.
+  // O nome antigo do cartão era "Contatados" e induzia ao erro — o Emerson estranhou
+  // a diferença para o filtro "Contatado" da fila (11) em 14/09.
+  const trabalhados = total - (porStatus['novo'] ?? 0)
+  const comMensagem = porStatus['mensagem_enviada'] ?? 0
+  const conversaram = porStatus['contatado'] ?? 0
   const agendados = porStatus['agendado'] ?? 0
   const aferidos = porStatus['aferido'] ?? 0
-  // Denominador = leads ABORDADOS, não a carteira inteira. Sobre a carteira, 6 de 1.351
-  // dá 0,44% e o arredondamento exibia "0%" — o painel dizia que nada tinha convertido
-  // justamente quando seis aferições já tinham sido feitas. Além disso, dividir pela
-  // carteira mede o tamanho da base, não o trabalho: quem tem mais leads parados sempre
-  // parece pior. Sobre quem foi abordado, o número responde à pergunta certa —
-  // "de cada 100 que falamos, quantos vieram aferir?". Uma casa decimal para o começo,
-  // quando ainda são poucos casos.
-  const taxaConversao = contatados > 0 ? (aferidos / contatados) * 100 : 0
-  const taxaTexto = taxaConversao >= 10 ? taxaConversao.toFixed(0) : taxaConversao.toFixed(1)
   const funil = FUNIL_ORDEM.map(({ status, label }) => ({ label, total: porStatus[status] ?? 0 }))
 
   return (
@@ -189,7 +228,13 @@ export default function Dashboard() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatTile icon={Users} label="Leads totais" value={total} accent="#3f57ff" />
-            <StatTile icon={PhoneCall} label="Contatados" value={contatados} accent="#0ea5e9" />
+            <StatTile
+              icon={PhoneCall}
+              label="Trabalhados"
+              value={trabalhados}
+              accent="#0ea5e9"
+              hint={`${comMensagem.toLocaleString('pt-BR')} só receberam mensagem · ${conversaram.toLocaleString('pt-BR')} conversaram`}
+            />
             <StatTile icon={CalendarClock} label="Agendados" value={agendados} accent="#f2a63b" />
             <StatTile icon={CheckCircle2} label="Aferidos" value={aferidos} accent="#22c55e" />
           </div>
@@ -220,17 +265,63 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
 
-            <div className="card p-5 flex flex-col justify-center items-center text-center">
-              <span className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-2">
-                Taxa de conversão
-              </span>
-              <div className="text-4xl font-extrabold text-lucro mb-1">
-                {taxaTexto.replace('.', ',')}%
-              </div>
-              <p className="text-xs text-ink-4">
-                {aferidos.toLocaleString('pt-BR')} de {contatados.toLocaleString('pt-BR')} leads
-                abordados chegaram a ser aferidos
+            {/* Conversão por canal (0094). Antes era uma taxa só, dividindo aferidos por
+                "contatados" — que misturava mensagem enviada com conversa real. Como os
+                dois canais convertem de formas muito diferentes, a média não respondia
+                nada. Aqui cada um tem o seu denominador, e a sobreposição fica dita. */}
+            <div className="card p-5">
+              <h2 className="text-sm font-extrabold text-ink mb-1">Conversão por canal</h2>
+              <p className="text-xs text-ink-4 mb-4">
+                De quem foi alcançado, quantos vieram aferir depois.
               </p>
+
+              <div className="mb-4">
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-xs font-bold uppercase tracking-wide text-ink-4">
+                    Mensagem de WhatsApp
+                  </span>
+                  <span className="text-2xl font-extrabold text-lucro">
+                    {pct(conv.mensagem.aferiram, conv.mensagem.alcancados)}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-4">
+                  {conv.mensagem.aferiram.toLocaleString('pt-BR')} de{' '}
+                  {conv.mensagem.alcancados.toLocaleString('pt-BR')} que receberam
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-xs font-bold uppercase tracking-wide text-ink-4">
+                    Ligação atendida
+                  </span>
+                  <span className="text-2xl font-extrabold text-ink">
+                    {pct(conv.ligacao.aferiram, conv.ligacao.alcancados)}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-4">
+                  {conv.ligacao.aferiram.toLocaleString('pt-BR')} de{' '}
+                  {conv.ligacao.alcancados.toLocaleString('pt-BR')} que pegaram o telefone
+                </p>
+              </div>
+
+              <div className="border-t border-line pt-3 text-xs text-ink-4 leading-relaxed">
+                {conv.ambos > 0 && (
+                  <>
+                    {conv.ambos.toLocaleString('pt-BR')} receberam os dois canais — as taxas não
+                    somam.{' '}
+                  </>
+                )}
+                {conv.veio_sozinho > 0 && (
+                  <>
+                    <span className="text-warn font-semibold">
+                      {conv.veio_sozinho.toLocaleString('pt-BR')} vieram sozinhos
+                    </span>{' '}
+                    (aferiram sem contato antes), de {conv.aferidos_total.toLocaleString('pt-BR')}{' '}
+                    aferições registradas.
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </>

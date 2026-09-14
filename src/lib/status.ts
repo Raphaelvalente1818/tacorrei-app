@@ -34,6 +34,9 @@ export const RESULTADO_LIGACAO_LABEL: Record<ResultadoLigacao, string> = {
   aferido: 'Aferição realizada',
   autorizou_whatsapp: 'Autorizou receber WhatsApp',
   atualizacao: 'Cadastro atualizado',
+  // 0095
+  aferiu_fora: 'Já aferiu no concorrente',
+  fora_de_area: 'Caminhão roda em outra praça',
 }
 
 export const CANAL_CONTATO_LABEL: Record<CanalContato, string> = {
