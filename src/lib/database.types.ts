@@ -87,6 +87,11 @@ export interface Caminhoneiro {
   // visível no filtro "Fora de área". Desmarcar é `desmarcar_fora_de_area`.
   fora_de_area_em: string | null
   fora_de_area_por?: string | null
+  // 0097 — NÃO existe campo `documento` aqui de propósito. A coluna existe no
+  // banco (CPF do autônomo / CNPJ do dono) e é usada só pelo servidor: para
+  // agrupar caminhões do mesmo dono e para consultar o Inmetro por documento.
+  // `obter_lead`, `fila_leads` e `buscar_por_placa` removem a chave antes de
+  // devolver. Se um dia ela aparecer numa tela, é bug — não recurso.
   created_at: string
   updated_at: string
 }
