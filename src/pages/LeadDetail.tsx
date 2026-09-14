@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MapPin, Truck, CalendarPlus, FileText, History, Pencil, Check, X,
@@ -253,13 +253,21 @@ export default function LeadDetail() {
   const { membro } = useAuth()
   const configMensagem = useConfigMensagem()
   const [lead, setLead] = useState<LeadComEmpresa | null>(null)
+  const leadRef = useRef<LeadComEmpresa | null>(null)
   const [ligacoes, setLigacoes] = useState<Ligacao[]>([])
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [loading, setLoading] = useState(true)
   const [showAgendar, setShowAgendar] = useState(false)
   // 0095 — confirmação para trazer de volta um caminhão marcado como fora de área.
   const [confirmarVoltaArea, setConfirmarVoltaArea] = useState(false)
+  const [confirmarTelefone, setConfirmarTelefone] = useState(false)
   const [showAferido, setShowAferido] = useState(false)
+  // 14/09 — Quando a operadora registra "Já aferiu no concorrente", a data do lead
+  // pula dois anos para a frente e ele sai da régua DELA na mesma hora. O recarregar
+  // vinha vazio e a tela virava "Lead não encontrado" — parecia que o app tinha comido
+  // o caminhão logo depois de ela clicar. Agora a ficha que já estava carregada
+  // continua na tela, com um aviso explicando por que ele saiu.
+  const [saiuDoAlcance, setSaiuDoAlcance] = useState(false)
 
   // edição inline
   const [editTelefone, setEditTelefone] = useState(false)
@@ -300,7 +308,17 @@ export default function LeadDetail() {
         .order('data_hora', { ascending: false }),
     ])
     const leadCarregado = (leadRes.data as LeadComEmpresa | null) ?? null
-    setLead(leadCarregado)
+    // Null DEPOIS de já ter carregado = o lead saiu da régua de quem está olhando
+    // (tipicamente porque a aferição registrada jogou o vencimento dois anos para a
+    // frente). Não é lead inexistente: segura o que está na tela e avisa. A leitura
+    // vem do ref, não do estado — `carregar` só é recriado quando o id muda, então
+    // o `lead` que ela veria aqui seria o de dois renders atrás.
+    const fora = leadCarregado === null && leadRef.current !== null
+    setSaiuDoAlcance(fora)
+    if (!fora) {
+      setLead(leadCarregado)
+      leadRef.current = leadCarregado
+    }
     setAgendamentos((agendamentosRes.data as Agendamento[]) ?? [])
 
     // Numa frota, a conversa que conta pode ter sido com o gestor, registrada na
@@ -367,6 +385,21 @@ export default function LeadDetail() {
       p_motivo: motivo || null,
     })
     setConfirmarVoltaArea(false)
+    if (err) {
+      setAlerta(err.message)
+      return
+    }
+    carregar()
+  }
+
+  // 14/09 — o número era bom: limpa a marca e o caminhão volta para a fila.
+  // Fica em `correcoes` com o motivo, como toda correção desde a 0088.
+  async function desfazerTelefoneInvalido(motivo: string) {
+    const { error: err } = await supabase.rpc('desmarcar_telefone_invalido', {
+      p_lead: id,
+      p_motivo: motivo || null,
+    })
+    setConfirmarTelefone(false)
     if (err) {
       setAlerta(err.message)
       return
@@ -605,6 +638,18 @@ export default function LeadDetail() {
 
   return (
     <div>
+      {/* 14/09 — a ficha continua na tela depois que o lead sai da régua de quem
+          está olhando. Sem isto, registrar "Já aferiu no concorrente" fazia a
+          página virar "Lead não encontrado" no segundo seguinte ao clique, como
+          se o app tivesse comido o caminhão. */}
+      {saiuDoAlcance && (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <strong className="font-extrabold">Pronto — este caminhão saiu da sua fila.</strong>{' '}
+          Com a aferição registrada, ele só volta quando o certificado estiver perto de
+          vencer de novo. O que está abaixo é a última leitura da ficha; para abrir de
+          novo, procure pela placa.
+        </div>
+      )}
       {/* -1 volta para a lista COM os filtros/página que estavam na URL. Se a pessoa
           abriu a ficha direto pelo link (sem passar pela lista), cai em /leads. */}
       <Link
@@ -726,6 +771,25 @@ export default function LeadDetail() {
                     title="Trazer este caminhão de volta para a fila"
                   >
                     voltar para a fila
+                  </button>
+                </span>
+              )}
+              {/* 14/09 — "Número inválido" tira o caminhão da fila e, até aqui, não
+                  deixava marca nenhuma na ficha: quem abrisse depois via um telefone
+                  de aparência normal e não entendia por que ele sumiu do dia a dia.
+                  Marcar por engano precisa ter volta, como tudo que some com lead. */}
+              {lead.telefone_invalido_em && (
+                <span className="inline-flex items-center gap-2">
+                  <span className="badge bg-rose-500/15 text-rose-300 border-rose-500/30">
+                    Telefone inválido desde{' '}
+                    {new Date(lead.telefone_invalido_em).toLocaleDateString('pt-BR')}
+                  </span>
+                  <button
+                    onClick={() => setConfirmarTelefone(true)}
+                    className="text-xs font-bold text-ink-4 hover:text-rose-200 underline underline-offset-2"
+                    title="O número está certo — devolver este caminhão para a fila"
+                  >
+                    desfazer
                   </button>
                 </span>
               )}
@@ -959,15 +1023,61 @@ export default function LeadDetail() {
                   o lead sai da fila e volta sozinho daqui a 2 anos.
                   0095 — só fica ACESO depois que a aferição existe, e aí mostra a data.
                   Antes era verde o tempo todo e parecia já marcado. */}
+              {/* 14/09 — O MESMO LUGAR CONTA AS TRÊS HISTÓRIAS.
+                  verde   = aferiu CONOSCO (é o que pontua e conta no Dashboard)
+                  vermelho= era nosso e aferiu no concorrente — perda de verdade
+                  âmbar   = aferiu no concorrente, mas nunca foi nosso — informação
+                  neutro  = ainda não há aferição conhecida: aí sim é um botão.
+                  Selo nunca é clicável: cor é estado, não ação (lição 21). Mas ao
+                  lado de todo selo fica o link "registrar aferição", senão a ficha
+                  congela — o caminhão que aferiu no concorrente em junho pode vir
+                  para nós em dezembro, e o que aferiu conosco volta daqui a 2 anos. */}
               {lead.status === 'aferido' ? (
-                <span
-                  className="flex items-center gap-1.5 border border-lucro/40 bg-lucro/10 text-lucro text-sm font-bold px-3.5 py-2 rounded-xl"
-                  title="Aferição já registrada. Para corrigir, use o histórico de contatos."
-                >
-                  <CheckCircle2 size={16} /> Aferido
-                  {lead.data_ultima_afericao && (
-                    <> em {new Date(lead.data_ultima_afericao + 'T12:00:00').toLocaleDateString('pt-BR')}</>
-                  )}
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className="flex items-center gap-1.5 border border-lucro/40 bg-lucro/10 text-lucro text-sm font-bold px-3.5 py-2 rounded-xl"
+                    title="Aferição registrada conosco."
+                  >
+                    <CheckCircle2 size={16} /> Aferido
+                    {lead.data_ultima_afericao && (
+                      <> em {new Date(lead.data_ultima_afericao + 'T12:00:00').toLocaleDateString('pt-BR')}</>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setShowAferido(true)}
+                    className="text-xs font-bold text-ink-4 hover:text-ink underline underline-offset-2"
+                    title="Registrar uma nova aferição para este caminhão"
+                  >
+                    nova aferição
+                  </button>
+                </span>
+              ) : lead.afericao_fora ? (
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={`flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl ${
+                      lead.afericao_fora.era_nosso
+                        ? 'border border-rose-500/40 bg-rose-500/10 text-rose-300'
+                        : 'border border-amber-500/40 bg-amber-500/10 text-amber-300'
+                    }`}
+                    title={
+                      lead.afericao_fora.era_nosso
+                        ? 'Este caminhão era nosso e foi aferido no concorrente.'
+                        : 'Aferido no concorrente. Ele nunca foi cliente da casa.'
+                    }
+                  >
+                    <CheckCircle2 size={16} />
+                    {lead.afericao_fora.era_nosso ? 'Perdemos — aferiu fora' : 'Aferiu no concorrente'}
+                    {lead.afericao_fora.data && (
+                      <> em {new Date(lead.afericao_fora.data + 'T12:00:00').toLocaleDateString('pt-BR')}</>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setShowAferido(true)}
+                    className="text-xs font-bold text-ink-4 hover:text-ink underline underline-offset-2"
+                    title="Se ele acabou vindo para nós, registre a aferição aqui"
+                  >
+                    registrar aferição
+                  </button>
                 </span>
               ) : (
                 <button
@@ -1253,6 +1363,17 @@ export default function LeadDetail() {
           pedirMotivo
           onConfirmar={(motivo) => voltarParaAFila(motivo)}
           onCancelar={() => setConfirmarVoltaArea(false)}
+        />
+      )}
+      {confirmarTelefone && (
+        <ConfirmarModal
+          titulo="O número está certo?"
+          texto={'Este telefone foi marcado como inválido e por isso o caminhão saiu da fila. Desfazendo, ele volta a aparecer no dia a dia da operadora.\n\nFica registrado quem desfez e por quê.'}
+          rotuloConfirmar="Desfazer e voltar para a fila"
+          perigo={false}
+          pedirMotivo
+          onConfirmar={(motivo) => desfazerTelefoneInvalido(motivo)}
+          onCancelar={() => setConfirmarTelefone(false)}
         />
       )}
     </div>

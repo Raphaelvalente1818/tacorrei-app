@@ -141,8 +141,21 @@ export interface EmpresaDoLead {
   veiculos: VeiculoDaFrota[]
 }
 
+// 14/09 — a aferição que aconteceu no CONCORRENTE, quando a operadora registrou
+// isso numa ligação. `era_nosso` vem de `historico_posto`: houve fuga, ou seja,
+// ele era cliente da casa e foi embora. É o que decide a cor do selo na ficha —
+// vermelho para perda, âmbar para quem sempre foi do concorrente.
+export interface AfericaoFora {
+  data: string | null
+  registrado_em: string
+  era_nosso: boolean
+}
+
 // O que `obter_lead` devolve: o caminhão e, quando ele é de frota, a frota junto.
-export type LeadComEmpresa = Caminhoneiro & { empresa?: EmpresaDoLead | null }
+export type LeadComEmpresa = Caminhoneiro & {
+  empresa?: EmpresaDoLead | null
+  afericao_fora?: AfericaoFora | null
+}
 
 export interface Ligacao {
   id: string
