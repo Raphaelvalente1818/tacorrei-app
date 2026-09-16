@@ -89,6 +89,14 @@ const DESFECHOS: Desfecho[] = [
     pedeData: true,
   },
   {
+    valor: 'dono_trocou',
+    label: 'Não é mais o dono do caminhão',
+    efeito:
+      'Sai da fila e para de receber mensagem: quem atendeu já disse que não tem nada com esse caminhão. Continua achável pela busca de placa, e volta sozinho quando a base trouxer o dono novo. Se ele te disser QUEM comprou, prefira o lápis ao lado do nome — aí o caminhão fica na fila, com o dono certo.',
+    status: 'novo',
+    confirmar: true,
+  },
+  {
     valor: 'fora_de_area',
     label: 'Caminhão roda em outra praça',
     efeito:

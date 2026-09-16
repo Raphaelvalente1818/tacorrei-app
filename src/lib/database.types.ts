@@ -27,6 +27,10 @@ export type ResultadoLigacao =
   // 'fora_de_area' → este caminhão roda e afere em outra praça; não é nosso alvo.
   | 'aferiu_fora'
   | 'fora_de_area'
+  // 0101 — a pessoa atendeu e disse que vendeu o caminhão, mas o cadastro do
+  // Inmetro ainda mostra ela. Sai da fila e do WhatsApp; continua achável pela
+  // busca por placa, e volta sozinho quando a importação trouxer outro documento.
+  | 'dono_trocou'
   // Colhido na ligação: "pode me mandar no WhatsApp?". É o consentimento que
   // libera a mensagem para quem é cliente de concorrente.
   | 'autorizou_whatsapp'
@@ -87,6 +91,9 @@ export interface Caminhoneiro {
   // visível no filtro "Fora de área". Desmarcar é `desmarcar_fora_de_area`.
   fora_de_area_em: string | null
   fora_de_area_por?: string | null
+  // 0101 — informou que não é mais o dono. O cadastro é que está velho, não o lead.
+  dono_trocou_em: string | null
+  dono_trocou_por?: string | null
   // 0097 — NÃO existe campo `documento` aqui de propósito. A coluna existe no
   // banco (CPF do autônomo / CNPJ do dono) e é usada só pelo servidor: para
   // agrupar caminhões do mesmo dono e para consultar o Inmetro por documento.

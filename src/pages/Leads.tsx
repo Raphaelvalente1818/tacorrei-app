@@ -16,7 +16,7 @@ type LeadNaFila = Caminhoneiro & {
   empresa_situacao?: 'contrato' | 'prospecto' | null
 }
 
-type FiltroLead = StatusLead | 'todos' | 'sem_tacografo' | 'sem_telefone' | 'fora_de_area'
+type FiltroLead = StatusLead | 'todos' | 'sem_tacografo' | 'sem_telefone' | 'fora_de_area' | 'dono_trocou'
 
 const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Todos', value: 'todos' },
@@ -28,6 +28,7 @@ const FILTROS: Array<{ label: string; value: FiltroLead }> = [
   { label: 'Aferido', value: 'aferido' },
   { label: 'Recusado', value: 'recusado' },
   { label: 'Sem tacógrafo', value: 'sem_tacografo' },
+  { label: 'Trocou de dono', value: 'dono_trocou' },
   // 0091 — o avesso da fila: quem não tem número para discar. Fica fora do dia a
   // dia da operadora (era isso que fazia 17 de 84 ligações darem em nada) e visível
   // para quem pode resolver: recaptura do RNTRC ou telefone da frota.
@@ -127,7 +128,8 @@ export default function Leads() {
     (f) =>
       (f.value !== 'sem_tacografo' || isAdmin) &&
       (f.value !== 'sem_telefone' || isGestao) &&
-      (f.value !== 'fora_de_area' || isGestao),
+      (f.value !== 'fora_de_area' || isGestao) &&
+      (f.value !== 'dono_trocou' || isGestao),
   )
   const [leads, setLeads] = useState<LeadNaFila[]>([])
   const [loading, setLoading] = useState(true)
@@ -457,6 +459,22 @@ export default function Leads() {
         </div>
       )}
 
+      {filtro === 'dono_trocou' && (
+        <div className="card p-5 mb-4 border-sky-500/40">
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
+            Esperando o cadastro alcançar a realidade
+          </p>
+          <p className="text-sm text-ink-6">
+            A pessoa atendeu e disse que vendeu o caminhão — mas o cadastro do RNTRC
+            ainda mostra ela como dona. O caminhão continua sendo alvo; quem está
+            errado é o contato. Ele sai da fila e do envio de mensagem, mas a busca
+            por placa continua achando, e ele <b>volta sozinho</b> quando uma
+            importação trouxer outro CPF/CNPJ para aquela placa. Se souber quem
+            comprou, abra a ficha e troque o dono no lápis — aí ele volta na hora.
+          </p>
+        </div>
+      )}
+
       {filtro === 'sem_telefone' && (
         <div className="card p-5 mb-4 border-amber-500/40">
           <p className="text-xs font-bold uppercase tracking-wide text-ink-4 mb-1">
@@ -582,6 +600,14 @@ export default function Leads() {
                             title="Roda e afere em outra praça — fora do nosso alvo"
                           >
                             fora de área
+                          </span>
+                        )}
+                        {lead.dono_trocou_em && (
+                          <span
+                            className="badge bg-sky-500/15 text-sky-300 border-sky-500/30"
+                            title="Informou que não é mais o dono. Aguardando a troca de proprietário no cadastro."
+                          >
+                            trocou de dono
                           </span>
                         )}
                         {lead.telefone_invalido_em && (

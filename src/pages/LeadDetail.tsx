@@ -261,6 +261,7 @@ export default function LeadDetail() {
   // 0095 — confirmação para trazer de volta um caminhão marcado como fora de área.
   const [confirmarVoltaArea, setConfirmarVoltaArea] = useState(false)
   const [confirmarTelefone, setConfirmarTelefone] = useState(false)
+  const [confirmarDono, setConfirmarDono] = useState(false)
   const [showAferido, setShowAferido] = useState(false)
   // 14/09 — Quando a operadora registra "Já aferiu no concorrente", a data do lead
   // pula dois anos para a frente e ele sai da régua DELA na mesma hora. O recarregar
@@ -385,6 +386,20 @@ export default function LeadDetail() {
       p_motivo: motivo || null,
     })
     setConfirmarVoltaArea(false)
+    if (err) {
+      setAlerta(err.message)
+      return
+    }
+    carregar()
+  }
+
+  // 0101 — o dono foi corrigido, ou a marca foi engano: devolve para a fila.
+  async function desfazerDonoTrocou(motivo: string) {
+    const { error: err } = await supabase.rpc('desmarcar_dono_trocou', {
+      p_lead: id,
+      p_motivo: motivo || null,
+    })
+    setConfirmarDono(false)
     if (err) {
       setAlerta(err.message)
       return
@@ -778,6 +793,27 @@ export default function LeadDetail() {
                   deixava marca nenhuma na ficha: quem abrisse depois via um telefone
                   de aparência normal e não entendia por que ele sumiu do dia a dia.
                   Marcar por engano precisa ter volta, como tudo que some com lead. */}
+              {/* 0101 — o cadastro é que está velho, não o lead. Por isso o selo é azul,
+                  e não âmbar de alerta: não há nada errado com o caminhão, só com o
+                  contato. E o texto diz o que a operadora está esperando acontecer. */}
+              {lead.dono_trocou_em && (
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className="badge bg-sky-500/15 text-sky-300 border-sky-500/30"
+                    title="Sai da fila e do WhatsApp. Volta sozinho quando uma importação trouxer outro CPF/CNPJ para esta placa."
+                  >
+                    Não é mais o dono — desde{' '}
+                    {new Date(lead.dono_trocou_em).toLocaleDateString('pt-BR')}
+                  </span>
+                  <button
+                    onClick={() => setConfirmarDono(true)}
+                    className="text-xs font-bold text-ink-4 hover:text-sky-200 underline underline-offset-2"
+                    title="Foi engano, ou o dono já foi corrigido: devolver para a fila"
+                  >
+                    voltar para a fila
+                  </button>
+                </span>
+              )}
               {lead.telefone_invalido_em && (
                 <span className="inline-flex items-center gap-2">
                   <span className="badge bg-rose-500/15 text-rose-300 border-rose-500/30">
@@ -1363,6 +1399,17 @@ export default function LeadDetail() {
           pedirMotivo
           onConfirmar={(motivo) => voltarParaAFila(motivo)}
           onCancelar={() => setConfirmarVoltaArea(false)}
+        />
+      )}
+      {confirmarDono && (
+        <ConfirmarModal
+          titulo="Devolver para a fila?"
+          texto={'Este caminhão está marcado como "não é mais o dono" e por isso saiu da fila e do envio de mensagem.\n\nSó desfaça se o dono já foi corrigido no cadastro, ou se a marca foi engano — senão a operadora vai ligar de novo para quem já pediu para não ser incomodado.\n\nFica registrado quem desfez e por quê.'}
+          rotuloConfirmar="Voltar para a fila"
+          perigo={false}
+          pedirMotivo
+          onConfirmar={(motivo) => desfazerDonoTrocou(motivo)}
+          onCancelar={() => setConfirmarDono(false)}
         />
       )}
       {confirmarTelefone && (

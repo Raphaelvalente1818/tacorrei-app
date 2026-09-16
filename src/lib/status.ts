@@ -37,6 +37,7 @@ export const RESULTADO_LIGACAO_LABEL: Record<ResultadoLigacao, string> = {
   // 0095
   aferiu_fora: 'Já aferiu no concorrente',
   fora_de_area: 'Caminhão roda em outra praça',
+  dono_trocou: 'Não é mais o dono do caminhão',
 }
 
 export const CANAL_CONTATO_LABEL: Record<CanalContato, string> = {
