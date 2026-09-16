@@ -169,13 +169,42 @@ async function buscarConversao(unidadeId: string | null): Promise<Conversao> {
 // esse tamanho é justamente o que faz valer a pena investir na operação. Aqui
 // ele vê a conta do ano inteiro, mês a mês, e nenhum caminhão: sem nome, sem
 // placa, sem telefone. Número não se disca.
-type Panorama = { meses: { mes: string; total: number }[]; total: number }
+//
+// 0102 — cada mês vem partido em três: cliente da casa (última aferição num posto
+// do grupo), concorrente (posto conhecido, não é nosso) e posto desconhecido (a
+// base de Santo André tem 167 sem a coluna W; chamar de concorrente seria mentir).
+// O mesmo mês com 200 vencimentos é lembrete se são clientes e conquista se são
+// do concorrente — o total sozinho não dizia qual esforço o mês pede.
+type PanoramaMes = { mes: string; total: number; cliente: number; concorrente: number; desconhecido: number }
+type Panorama = { meses: PanoramaMes[]; total: number; cliente: number; concorrente: number; desconhecido: number }
+const PANORAMA_VAZIO: Panorama = { meses: [], total: 0, cliente: 0, concorrente: 0, desconhecido: 0 }
 
 async function buscarPanorama(unidadeId: string | null): Promise<Panorama> {
   const { data, error } = await supabase.rpc('panorama_do_ano', { p_unidade: unidadeId })
-  if (error || !data) return { meses: [], total: 0 }
-  return data as Panorama
+  if (error || !data) return PANORAMA_VAZIO
+  const p = data as Partial<Panorama>
+  // Tolerante ao banco antigo (só `total`): as fatias ficam em zero e o gráfico
+  // vira uma barra só, em vez de quebrar.
+  return {
+    meses: (p.meses ?? []).map((m) => ({
+      mes: m.mes,
+      total: m.total ?? 0,
+      cliente: m.cliente ?? 0,
+      concorrente: m.concorrente ?? 0,
+      desconhecido: m.desconhecido ?? 0,
+    })),
+    total: p.total ?? 0,
+    cliente: p.cliente ?? 0,
+    concorrente: p.concorrente ?? 0,
+    desconhecido: p.desconhecido ?? 0,
+  }
 }
+
+// As cores do panorama: verde é a marca (cliente da casa), azul é o de apoio
+// (concorrente — o que há para conquistar), cinza é o que ainda não sabemos.
+const COR_CLIENTE = '#22c55e'
+const COR_CONCORRENTE = '#3f57ff'
+const COR_DESCONHECIDO = '#5b6579'
 
 // '2026-10' → 'out/26'
 function rotuloMes(mes: string): string {
@@ -198,7 +227,7 @@ export default function Dashboard() {
   const [total, setTotal] = useState(0)
   const [porStatus, setPorStatus] = useState<Record<string, number>>({})
   const [conv, setConv] = useState<Conversao>(CONVERSAO_VAZIA)
-  const [panorama, setPanorama] = useState<Panorama>({ meses: [], total: 0 })
+  const [panorama, setPanorama] = useState<Panorama>(PANORAMA_VAZIO)
   const isGestao = membro?.papel === 'admin' || membro?.papel === 'admin_unidade'
 
   useEffect(() => {
@@ -242,7 +271,11 @@ export default function Dashboard() {
   const agendados = porStatus['agendado'] ?? 0
   const aferidos = porStatus['aferido'] ?? 0
   const funil = FUNIL_ORDEM.map(({ status, label }) => ({ label, total: porStatus[status] ?? 0 }))
-  const meses = panorama.meses.map((m) => ({ label: rotuloMes(m.mes), total: m.total }))
+  const meses = panorama.meses.map((m) => ({ ...m, label: rotuloMes(m.mes) }))
+  // A fatia cinza só entra no desenho onde existe (Santo André); em São Bernardo
+  // é zero em todos os meses e não ganha legenda nem barra.
+  const temDesconhecido = panorama.desconhecido > 0
+  const n = (x: number) => x.toLocaleString('pt-BR')
 
   return (
     <div>
@@ -369,11 +402,29 @@ export default function Dashboard() {
                   {panorama.total.toLocaleString('pt-BR')}
                 </span>
               </div>
-              <p className="text-xs text-ink-4 mb-4">
+              <p className="text-xs text-ink-4 mb-3">
                 Caminhões que vencem nos próximos doze meses. A fila do dia entrega
                 quem já dá para trabalhar; o resto aparece aqui como conta, e chega
                 na fila no mês dele.
               </p>
+              {/* 0102 — a legenda com os totais do ano. Verde é lembrete (já é
+                  cliente), azul é conquista (afere no concorrente). */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs font-semibold text-ink-6 mb-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: COR_CLIENTE }} />
+                  Cliente <span className="text-ink font-extrabold">{n(panorama.cliente)}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: COR_CONCORRENTE }} />
+                  Concorrente <span className="text-ink font-extrabold">{n(panorama.concorrente)}</span>
+                </span>
+                {temDesconhecido && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: COR_DESCONHECIDO }} />
+                    Posto desconhecido <span className="text-ink font-extrabold">{n(panorama.desconhecido)}</span>
+                  </span>
+                )}
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={meses} margin={{ left: 0, right: 8, top: 12 }}>
                   <CartesianGrid vertical={false} stroke="#232c40" />
@@ -388,10 +439,28 @@ export default function Dashboard() {
                   <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     contentStyle={{ borderRadius: 12, border: '1px solid #232c40', background: '#141b2a', color: '#f3f6fb', fontSize: 13 }}
+                    formatter={(valor, nome) => [n(Number(valor ?? 0)), String(nome ?? '')]}
                   />
-                  <Bar dataKey="total" fill="#3f57ff" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="total" position="top" style={{ fill: '#c3cbd9', fontWeight: 600, fontSize: 11 }} />
+                  {/* Empilhadas na ordem: cliente embaixo (a base que já é nossa),
+                      concorrente por cima, desconhecido no topo quando existe. O
+                      número no alto é o total do mês, sempre no último segmento. */}
+                  <Bar dataKey="cliente" name="Cliente" stackId="mes" fill={COR_CLIENTE} />
+                  <Bar
+                    dataKey="concorrente"
+                    name="Concorrente"
+                    stackId="mes"
+                    fill={COR_CONCORRENTE}
+                    radius={temDesconhecido ? undefined : [4, 4, 0, 0]}
+                  >
+                    {!temDesconhecido && (
+                      <LabelList dataKey="total" position="top" style={{ fill: '#c3cbd9', fontWeight: 600, fontSize: 11 }} />
+                    )}
                   </Bar>
+                  {temDesconhecido && (
+                    <Bar dataKey="desconhecido" name="Posto desconhecido" stackId="mes" fill={COR_DESCONHECIDO} radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="total" position="top" style={{ fill: '#c3cbd9', fontWeight: 600, fontSize: 11 }} />
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
