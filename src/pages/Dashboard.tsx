@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+// 15/09 - os rotulos dos eixos usam #c3cbd9, o mesmo valor do token `ink-6`. O
+// recharts pinta em SVG e nao le classe do Tailwind, entao a cor vive aqui escrita
+// a mao. Se o token mudar de novo, estes quatro pontos mudam junto - senao o
+// grafico fica o unico lugar do app com o cinza antigo.
 import { Users, PhoneCall, CalendarClock, CheckCircle2, Trophy, CalendarRange } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
@@ -272,7 +276,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={funil} layout="vertical" margin={{ left: 8, right: 24 }}>
                   <CartesianGrid horizontal={false} stroke="#232c40" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#93a0b8' }} axisLine={false} tickLine={false} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#c3cbd9' }} axisLine={false} tickLine={false} />
                   <YAxis
                     type="category"
                     dataKey="label"
@@ -375,18 +379,18 @@ export default function Dashboard() {
                   <CartesianGrid vertical={false} stroke="#232c40" />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 11, fill: '#93a0b8' }}
+                    tick={{ fontSize: 11, fill: '#c3cbd9' }}
                     axisLine={false}
                     tickLine={false}
                     interval={0}
                   />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#93a0b8' }} axisLine={false} tickLine={false} width={36} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#c3cbd9' }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     contentStyle={{ borderRadius: 12, border: '1px solid #232c40', background: '#141b2a', color: '#f3f6fb', fontSize: 13 }}
                   />
                   <Bar dataKey="total" fill="#3f57ff" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="total" position="top" style={{ fill: '#93a0b8', fontWeight: 600, fontSize: 11 }} />
+                    <LabelList dataKey="total" position="top" style={{ fill: '#c3cbd9', fontWeight: 600, fontSize: 11 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

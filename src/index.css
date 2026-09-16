@@ -5,9 +5,16 @@
   --color-brand: #22c55e;       /* verde — cor principal (ativo, botões) */
   --color-brand-d: #16a34a;     /* verde escuro — hover */
   --color-blue: #3f57ff;        /* azul de apoio */
-  --color-ink: #f3f6fb;         /* texto principal (claro) */
-  --color-ink-6: #93a0b8;       /* texto secundário */
-  --color-ink-4: #5f6b83;       /* texto apagado */
+  --color-ink: #f3f6fb;         /* texto principal (claro) — 15,9:1 sobre o cartão */
+  /* 15/09 — a Pamela escolheu o nível "C" no comparativo: o texto de apoio estava
+     fraco demais para ler o dia inteiro. O apagado era 3,2:1, abaixo do mínimo de
+     4,5:1 — e ele carrega as etiquetas dos campos, os textos de ajuda, o "há 12
+     dias", o "sem contato". Subiu para 7,6:1.
+     O secundário subiu junto, e isso NÃO é capricho: com o apoio em 7,6 e o
+     secundário parado em 6,5, o "apagado" ficaria mais claro que o "secundário" —
+     a escada de importância invertida. Agora é 15,9 > 10,6 > 7,6, nesta ordem. */
+  --color-ink-6: #c3cbd9;       /* texto secundário — 10,6:1 */
+  --color-ink-4: #a3adc2;       /* texto de apoio — 7,6:1 */
   --color-line: #232c40;        /* bordas */
   --color-card: #141b2a;        /* cartões */
   --color-card2: #182031;       /* cartão alternativo / hover */
