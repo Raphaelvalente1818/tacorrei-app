@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Building2, ChevronLeft, ChevronRight, CheckCircle2, MessageCircle, Pencil, Phone, Plus, Truck,
-  Upload, X,
+  Building2, ChevronLeft, ChevronRight, CheckCircle2, MessageCircle, Pencil, Phone, Plus, Search,
+  Truck, Upload, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useConfigMensagem, useFiltroUnidade } from '../lib/AuthContext'
@@ -108,6 +109,37 @@ function diasDesde(iso: string | null): number | null {
   return Math.floor(ms / 86400000)
 }
 
+// 16/09 — BUSCA NA TELA DE EMPRESAS. Com 828 empresas, achar uma pelo olho não
+// dá; o Emerson pediu "Buscar nome, placa, cnpj…". A lista inteira já está no
+// navegador (empresas_painel devolve tudo de uma vez), então nome e CNPJ se
+// filtram aqui mesmo, sem ir ao banco:
+//   nome → sem acento e sem caixa ("magela" acha "TRANS MAGELA").
+//   cnpj → só os dígitos, a partir de 3 ("54094" acha "54.094.768/0001-09").
+// Placa é diferente: a placa está no caminhão, não na empresa, e a lista não
+// traz placas. Quando o que foi digitado tem cara de placa completa, a tela
+// pergunta ao banco (`buscar_por_placa`, o mesmo da tela de Leads — que também
+// registra a consulta na trilha) e filtra pela empresa dona do caminhão. Placa
+// de autônomo não tem empresa: a tela diz isso e aponta para a ficha em Leads.
+// A busca vale para TODAS as abas, inclusive "Sem dados": quem procura pelo
+// nome quer achar a empresa, não adivinhar em que aba ela caiu.
+function semAcento(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+function soDigitos(s: string): string {
+  return s.replace(/\D/g, '')
+}
+function normalizaPlaca(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+// AAA9999 (antiga) ou AAA9A99 (Mercosul) — só placa inteira dispara a consulta.
+function pareceplaca(s: string): boolean {
+  return /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(s)
+}
+type AchadoPlaca =
+  | { tipo: 'nada'; placa: string }
+  | { tipo: 'autonomo'; placa: string; leadId: string; nome: string }
+  | { tipo: 'empresa'; placa: string; empresaId: string }
+
 function numeroWhatsapp(tel: string | null): string | null {
   if (!tel) return null
   const d = tel.replace(/\D/g, '')
@@ -180,6 +212,36 @@ export default function Empresas() {
   const [vendoFrota, setVendoFrota] = useState<{ id: string; nome: string } | null>(null)
   const [contatando, setContatando] = useState<EmpresaPainel | null>(null)
   const [importando, setImportando] = useState(false)
+  const [busca, setBusca] = useState('')
+  const [buscaDebounced, setBuscaDebounced] = useState('')
+  const [achadoPlaca, setAchadoPlaca] = useState<AchadoPlaca | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca.trim()), 300)
+    return () => clearTimeout(t)
+  }, [busca])
+
+  // Só vai ao banco quando o que foi digitado é uma placa inteira. O resto da
+  // busca é local. `cancelado` evita que uma resposta atrasada sobrescreva a
+  // busca seguinte.
+  useEffect(() => {
+    const placa = normalizaPlaca(buscaDebounced)
+    if (!pareceplaca(placa)) {
+      setAchadoPlaca(null)
+      return
+    }
+    let cancelado = false
+    supabase.rpc('buscar_por_placa', { p_placa: placa }).then(({ data, error }) => {
+      if (cancelado) return
+      const lead = (!error && data) as { id: string; nome: string; empresa_id: string | null } | null | false
+      if (!lead) setAchadoPlaca({ tipo: 'nada', placa })
+      else if (lead.empresa_id) setAchadoPlaca({ tipo: 'empresa', placa, empresaId: lead.empresa_id })
+      else setAchadoPlaca({ tipo: 'autonomo', placa, leadId: lead.id, nome: lead.nome })
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [buscaDebounced])
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -254,7 +316,24 @@ export default function Empresas() {
   //              desempate é a empresa há mais tempo sem contato.
   // "Sem dados" fica fora de "Todas": são empresas sem nenhum veículo com posto,
   // que quase certamente não têm tacógrafo. Aparecem só na aba delas.
+  const buscando = buscaDebounced !== ''
   const visiveis = useMemo(() => {
+    // Buscando: todas as abas, ordem alfabética — quem digitou um nome quer
+    // achar a empresa, não a fila de trabalho.
+    if (buscando) {
+      const qNome = semAcento(buscaDebounced)
+      const qDig = soDigitos(buscaDebounced)
+      const empresaDaPlaca = achadoPlaca?.tipo === 'empresa' ? achadoPlaca.empresaId : null
+      return empresas
+        .filter(
+          (e) =>
+            e.id === empresaDaPlaca ||
+            semAcento(e.nome).includes(qNome) ||
+            (qDig.length >= 3 && soDigitos(e.cnpj ?? '').includes(qDig))
+        )
+        .sort((a, b) => a.nome.localeCompare(b.nome))
+    }
+
     const base =
       aba === 'todas'
         ? empresas.filter((e) => e.classe !== 'sem_dados')
@@ -278,7 +357,7 @@ export default function Empresas() {
       })
     }
     return ordenada
-  }, [empresas, aba])
+  }, [empresas, aba, buscando, buscaDebounced, achadoPlaca])
 
   const totais = useMemo(
     () => ({
@@ -381,8 +460,35 @@ export default function Empresas() {
       {/* O filtro só aparece quando há empresa cadastrada — numa tela vazia ele
           seria botões que não fazem nada. */}
       {empresas.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {([
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative mr-2">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-4" />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar nome, placa, CNPJ…"
+              className="pl-8 pr-8 py-1.5 border border-line rounded-xl text-sm w-64 focus-ring outline-none bg-card"
+            />
+            {busca && (
+              <button
+                onClick={() => setBusca('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-4 hover:text-ink"
+                aria-label="Limpar busca"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {/* Enquanto busca, as abas saem do caminho: a busca olha todas. */}
+          {buscando ? (
+            <span className="text-sm text-ink-4">
+              <b className="text-ink">{visiveis.length}</b>{' '}
+              {visiveis.length === 1 ? 'empresa encontrada' : 'empresas encontradas'} em todas as abas
+              {achadoPlaca?.tipo === 'empresa' && (
+                <> · placa <b className="text-ink">{achadoPlaca.placa}</b> é desta frota</>
+              )}
+            </span>
+          ) : ([
             { v: 'todas' as const, t: 'Todas', n: contagem.todas, ajuda: 'Tudo, menos as sem dados' },
             { v: 'mista' as const, t: 'Pé na porta', n: contagem.mista, ajuda: 'Já temos ao menos um caminhão dessas empresas' },
             { v: 'virgem' as const, t: 'A conquistar', n: contagem.virgem, ajuda: 'Nenhum caminhão conosco ainda' },
@@ -416,6 +522,42 @@ export default function Empresas() {
               Cadastre uma pelo botão acima, ou importe a base de contratos — cada linha precisa de
               CNPJ, nome, telefone, placa e data da última aferição.
             </p>
+          </div>
+        ) : visiveis.length === 0 && buscando ? (
+          <div className="p-8 text-center">
+            <Building2 size={28} className="mx-auto text-ink-4 mb-3" />
+            {achadoPlaca?.tipo === 'autonomo' ? (
+              <>
+                <p className="text-sm font-bold text-ink mb-1">
+                  A placa {achadoPlaca.placa} é de um autônomo, não de uma empresa
+                </p>
+                <p className="text-xs text-ink-4">
+                  Está no nome de <b className="text-ink-6">{achadoPlaca.nome}</b>.{' '}
+                  <Link to={`/leads/${achadoPlaca.leadId}`} className="text-brand font-bold hover:underline">
+                    Abrir a ficha em Leads &amp; Ligações
+                  </Link>
+                </p>
+              </>
+            ) : achadoPlaca === null && pareceplaca(normalizaPlaca(buscaDebounced)) ? (
+              <p className="text-sm text-ink-4">Procurando a placa…</p>
+            ) : achadoPlaca?.tipo === 'nada' ? (
+              <>
+                <p className="text-sm font-bold text-ink mb-1">
+                  Nenhum caminhão com a placa {achadoPlaca.placa} na base
+                </p>
+                <p className="text-xs text-ink-4">
+                  Confira a placa. Se ele existe e não está aqui, o caminho é cadastrar pela tela de Leads.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-ink mb-1">Nenhuma empresa encontrada</p>
+                <p className="text-xs text-ink-4">
+                  Busque pelo nome (sem precisar de acento), por parte do CNPJ ou por uma placa
+                  inteira — a placa acha a empresa dona do caminhão.
+                </p>
+              </>
+            )}
           </div>
         ) : visiveis.length === 0 ? (
           <div className="p-8 text-center">
