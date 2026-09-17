@@ -144,7 +144,12 @@ export interface EmpresaDoLead {
   agrupamento_dias: number
   // "Herda o melhor": se UM caminhão da frota já aferiu conosco, a pessoa que
   // atende o telefone nos conhece. O opt-in é dela, não da placa.
+  // `ja_e_cliente` responde "pode receber mensagem?" (nosso OU autorizou) — o
+  // nome envelheceu mal. 0103 separa: `algum_nosso` é cliente de verdade;
+  // `algum_autorizou` é quem consentiu na ligação sem nunca ter aferido conosco.
   ja_e_cliente: boolean
+  algum_nosso?: boolean
+  algum_autorizou?: boolean
   veiculos: VeiculoDaFrota[]
 }
 

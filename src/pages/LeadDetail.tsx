@@ -36,14 +36,38 @@ const VALIDADE_ANOS = 2
 // o telefone é a mesma pessoa para os sete caminhões — ela esteve na oficina,
 // deu o número, sabe quem somos. O opt-in é da pessoa, não da placa. Falar do
 // segundo caminhão dela não é abordagem fria, é crescer uma conta que já é nossa.
+//
+// 0103 — "cliente da casa" e "pode receber mensagem" NÃO são a mesma coisa. A
+// Trans Serra apareceu com o selo "Cliente da casa" tendo aferido na Regional:
+// a frota tinha autorizado na ligação, e o front lia `ja_e_cliente` (que é
+// nosso OU autorizou) como se fosse "é cliente". Quem só autorizou recebe a
+// primeira abordagem que consentiu, não o lembrete de fornecedor — o tom muda.
 function ehClienteDaCasa(lead: LeadComEmpresa): boolean {
-  if (lead.empresa) return lead.empresa.ja_e_cliente
+  if (lead.empresa) return lead.empresa.algum_nosso ?? false
   return lead.nosso ?? false
 }
 
 // Quem pode receber mensagem: cliente da casa, ou quem autorizou na ligação.
+// Na frota, o opt-in é da pessoa: basta um caminhão dela ter autorizado.
 function podeReceberMensagem(lead: LeadComEmpresa): boolean {
+  if (lead.empresa) return lead.empresa.ja_e_cliente || lead.autorizou_whatsapp
   return ehClienteDaCasa(lead) || lead.autorizou_whatsapp
+}
+
+// 17/09 — a mensagem deste ciclo já saiu? O banco só aceita UMA por lead por
+// ciclo (o ciclo zera quando ele afere). Antes o botão continuava verde depois
+// do envio e, no clique, aparecia um aviso — lição 21 de novo: verde diz "pode"
+// quando a verdade é "já foi". Agora o botão sai de cena e a data fica no lugar.
+// Mensagem anterior à última aferição é de outro ciclo e não conta.
+function mensagemNesteCiclo(lead: LeadComEmpresa): boolean {
+  if (!lead.data_ultimo_whatsapp) return false
+  if (!lead.data_ultima_afericao) return true
+  return new Date(lead.data_ultimo_whatsapp) > new Date(lead.data_ultima_afericao + 'T23:59:59')
+}
+
+// A frota autorizou (por este caminhão ou por outro), sem ser cliente.
+function frotaAutorizou(lead: LeadComEmpresa): boolean {
+  return !!lead.empresa && !ehClienteDaCasa(lead) && (lead.empresa.algum_autorizou ?? false)
 }
 
 // O telefone do lead vem do RNTRC, e lá está o número de QUEM DIRIGE aquele
@@ -495,7 +519,7 @@ export default function LeadDetail() {
       )
       return
     }
-    if (lead.data_ultimo_whatsapp) {
+    if (mensagemNesteCiclo(lead)) {
       setAlerta('Este lead já recebeu uma mensagem. A regra é uma por cliente — insistir é o que mais gera bloqueio. Ele volta a ser abordável depois da próxima aferição.')
       return
     }
@@ -762,6 +786,15 @@ export default function LeadDetail() {
                     desfazer
                   </button>
                 </span>
+              ) : frotaAutorizou(lead) ? (
+                /* 0103 — outro caminhão da frota autorizou; este herda o opt-in da
+                   pessoa, mas o "desfazer" mora na ficha de quem autorizou. */
+                <span
+                  className="badge bg-teal-500/15 text-teal-300 border-teal-500/30"
+                  title="Alguém da frota autorizou receber mensagem numa ligação; o opt-in é da pessoa, não da placa"
+                >
+                  Frota autorizou mensagem
+                </span>
               ) : lead.posto_afericao ? (
                 <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30">
                   Cliente de concorrente
@@ -986,9 +1019,11 @@ export default function LeadDetail() {
               </span>
             </div>
 
-            {lead.data_ultimo_whatsapp && (
-              <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                <MessageCircle size={14} /> WhatsApp enviado em{' '}
+            {/* Quando a mensagem é deste ciclo, quem informa é o lugar do botão
+                (acima, à direita). Aqui fica só a de ciclo anterior. */}
+            {lead.data_ultimo_whatsapp && !mensagemNesteCiclo(lead) && (
+              <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-ink-4">
+                <MessageCircle size={14} /> WhatsApp de ciclo anterior, em{' '}
                 {new Date(lead.data_ultimo_whatsapp).toLocaleDateString('pt-BR')}
               </div>
             )}
@@ -1013,6 +1048,16 @@ export default function LeadDetail() {
                   <Phone size={16} /> Liguei — autorizou mensagem
                 </button>
               )}
+              {mensagemNesteCiclo(lead) ? (
+                /* 17/09 — já foi: o botão vira a data. Uma por ciclo; volta quando aferir. */
+                <span
+                  className="flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  title="Uma mensagem por ciclo: este lead volta a ser abordável depois da próxima aferição"
+                >
+                  <MessageCircle size={16} /> Mensagem enviada em{' '}
+                  {new Date(lead.data_ultimo_whatsapp!).toLocaleDateString('pt-BR')}
+                </span>
+              ) : (
               <button
                 onClick={abrirWhatsapp}
                 className={`flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl transition-colors ${
@@ -1032,6 +1077,7 @@ export default function LeadDetail() {
               >
                 <MessageCircle size={16} /> Enviar WhatsApp
               </button>
+              )}
               {lead.whatsapp_invalido ? (
                 <button
                   onClick={desmarcarSemWhatsapp}
