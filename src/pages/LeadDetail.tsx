@@ -163,6 +163,11 @@ function saudacao(): string {
 
 // Os caminhões que entram na mesma conversa, escritos como lista. Só aparece
 // quando ela marcou algum irmão — frota de um caminhão só não ganha bloco extra.
+//
+// 18/09 — o fecho dizia "dá para trazer todos de uma vez, numa viagem só". O
+// Emerson: "não dá para levar muitos caminhões lá" — o posto não tem pátio nem
+// ensaio para uma frota chegando junta. A mensagem agora combina o dia de cada
+// um (texto do Emerson); a facilidade que a gente oferece é a guia pronta, não a fila na porta.
 function blocoDaFrota(irmaos: VeiculoDaFrota[]): string {
   if (irmaos.length === 0) return ''
   const linhas = irmaos
@@ -174,7 +179,7 @@ function blocoDaFrota(irmaos: VeiculoDaFrota[]): string {
 E já aproveitando, ${plural ? 'estes também estão para vencer' : 'este também está para vencer'}:
 ${linhas}
 
-Se preferir, dá para trazer ${plural ? 'todos de uma vez' : 'os dois juntos'} — eu deixo as guias prontas e vocês resolvem numa viagem só.`
+Se quiser, eu já deixo as guias prontas. Traga os veículos quando achar melhor.`
 }
 
 function montarMensagem(

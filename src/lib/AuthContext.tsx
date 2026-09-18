@@ -150,7 +150,8 @@ export const MENSAGEM_PADRAO: ConfigMensagem = {
   credencial: 'Posto de ensaio credenciado pelo Inmetro',
   conviteVencido: 'Venha aferir com a gente e já saia com tudo em dia.',
   conviteAVencer: 'Venha aferir com a gente antes do prazo e já saia com tudo em dia.',
-  avisoContrato: 'Atendemos por ordem de chegada e cada veículo já sai com tudo em dia. Se preferirem trazer todos juntos, é só combinar.',
+  // 18/09 — não convidar a frota a vir junta: o posto não comporta. Combina-se o dia.
+  avisoContrato: 'Atendemos por ordem de chegada e cada veículo já sai com tudo em dia.',
 }
 
 export function configMensagemDe(u: Unidade | null | undefined): ConfigMensagem {

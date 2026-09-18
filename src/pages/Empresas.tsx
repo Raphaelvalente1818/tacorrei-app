@@ -179,8 +179,7 @@ Segue a relação dos veículos da ${empresa.nome} com o certificado do tacógra
 ${lista}
 
 ${cfg.avisoContrato}
-
-Estou à disposição.${onde}`
+Qualquer dúvida é só falar que estou à disposição.${onde}`
 }
 
 export default function Empresas() {
