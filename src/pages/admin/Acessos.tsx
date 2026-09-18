@@ -23,6 +23,46 @@ const PAPEL_LABEL: Record<Membro['papel'], string> = {
   operador: 'Operador',
 }
 
+// 18/09 — SENHA MÍNIMA É 8, E O ERRO TEM QUE SER LIDO. O Emerson criou o João com
+// "123456" e a tela devolveu "Edge Function returned a non-2xx status code". Dois
+// defeitos: a tela pedia "mín. 6" enquanto o Supabase exige 8 desde 10/09 (Attack
+// Protection); e o supabase-js, quando a função devolve erro, põe a frase genérica
+// em `error.message` e esconde o motivo real dentro de `error.context` (a Response).
+// Agora o mínimo bate com o banco e o motivo é lido de dentro da resposta.
+const SENHA_MINIMA = 8
+
+// Tira o motivo de verdade de um erro de Edge Function. Sem isso, toda falha
+// vira "non-2xx" — que não diz nada para quem está na tela.
+async function motivoDoErro(error: unknown, data: unknown): Promise<string | null> {
+  const doCorpo = (data as { error?: string } | null)?.error
+  if (doCorpo) return doCorpo
+  if (!error) return null
+  const ctx = (error as { context?: unknown }).context
+  if (ctx instanceof Response) {
+    try {
+      const j = (await ctx.clone().json()) as { error?: string; message?: string; msg?: string }
+      const m = j.error ?? j.message ?? j.msg
+      if (m) return traduzErroAuth(m)
+    } catch {
+      /* corpo não era JSON */
+    }
+  }
+  const msg = (error as { message?: string }).message
+  return msg ? traduzErroAuth(msg) : 'Não foi possível criar o acesso.'
+}
+
+// As frases do Supabase Auth vêm em inglês; as mais comuns ganham tradução.
+function traduzErroAuth(m: string): string {
+  const s = m.toLowerCase()
+  if (s.includes('password') && (s.includes('at least') || s.includes('length') || s.includes('weak')))
+    return `A senha precisa ter pelo menos ${SENHA_MINIMA} caracteres.`
+  if (s.includes('already') && (s.includes('registered') || s.includes('exists')))
+    return 'Já existe um acesso com esse e-mail.'
+  if (s.includes('invalid') && s.includes('email')) return 'E-mail inválido.'
+  if (s.includes('non-2xx')) return 'O servidor recusou o cadastro. Confira e-mail e senha (mínimo de 8 caracteres).'
+  return m
+}
+
 // `unidadeFixa`: a tela Gestão → Equipe é de UMA unidade; quando o admin geral
 // está em "Todas" e escolheu uma no painel, ela vem por aqui.
 export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; unidadeFixa?: string | null }) {
@@ -83,8 +123,8 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
 
   async function criarAcesso() {
     setMsg(null)
-    if (!nome.trim() || !email.trim() || senha.length < 6) {
-      setMsg({ tipo: 'erro', texto: 'Preencha nome, e-mail e uma senha de pelo menos 6 caracteres.' })
+    if (!nome.trim() || !email.trim() || senha.length < SENHA_MINIMA) {
+      setMsg({ tipo: 'erro', texto: `Preencha nome, e-mail e uma senha de pelo menos ${SENHA_MINIMA} caracteres.` })
       return
     }
     setCriando(true)
@@ -92,7 +132,7 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
       body: { nome: nome.trim(), email: email.trim(), senha, papel, unidade_id: unidadeId || null },
     })
     setCriando(false)
-    const erro = error ? error.message : (data as { error?: string })?.error
+    const erro = await motivoDoErro(error, data)
     if (erro) {
       setMsg({ tipo: 'erro', texto: erro })
       return
@@ -126,7 +166,7 @@ export default function Acessos({ podeTudo, unidadeFixa }: { podeTudo: boolean; 
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" type="email"
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
-          <input value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha (mín. 6)" type="text"
+          <input value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={`Senha (mín. ${SENHA_MINIMA})`} type="text"
             className="px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none" />
           {podeTudo ? (
             <div className="grid grid-cols-2 gap-3">

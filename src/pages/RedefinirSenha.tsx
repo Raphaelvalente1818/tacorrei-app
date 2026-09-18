@@ -28,8 +28,10 @@ export default function RedefinirSenha() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setErro(null)
-    if (senha.length < 6) {
-      setErro('A senha precisa ter pelo menos 6 caracteres.')
+    // 18/09 — o Supabase exige 8 desde 10/09 (Attack Protection); a tela dizia 6 e o
+    // banco recusava com uma frase genérica. O número tem que ser o mesmo dos dois lados.
+    if (senha.length < 8) {
+      setErro('A senha precisa ter pelo menos 8 caracteres.')
       return
     }
     if (senha !== confirma) {
@@ -96,7 +98,7 @@ export default function RedefinirSenha() {
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 className="w-full px-3 py-2.5 border border-line rounded-xl text-sm focus-ring outline-none"
-                placeholder="Pelo menos 6 caracteres"
+                placeholder="Pelo menos 8 caracteres"
               />
             </div>
             <div>
