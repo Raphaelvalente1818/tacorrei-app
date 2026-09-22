@@ -307,6 +307,12 @@ export default function Dashboard() {
         <p className="text-sm text-ink-4">Carregando…</p>
       ) : (
         <>
+          {/* 22/09 — os quatro blocos são retrato de HOJE, desde o início, dentro da
+              régua; só o placar acima fala do mês. O Emerson perguntou "de qual período?"
+              — a resposta tem que estar na tela, não na cabeça de quem lê. */}
+          <p className="text-[11px] text-ink-4 mb-2">
+            Situação de <b className="text-ink-6">hoje</b>, desde o início do app · caminhões dentro dos 12 meses da régua
+          </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatTile icon={Users} label="Leads totais" value={total} accent="#3f57ff" />
             <StatTile
