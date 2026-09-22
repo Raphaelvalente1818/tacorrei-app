@@ -21,7 +21,14 @@ const FUNIL_ORDEM: Array<{ status: StatusLead; label: string }> = [
 // Mensagens de WhatsApp enviadas no mês corrente, por unidade. Vem da RPC
 // `placar_unidades()`, que é SECURITY DEFINER e devolve SÓ os totais agregados —
 // por isso a operadora de uma unidade vê o número da outra sem enxergar lead algum.
-type PlacarItem = { unidade: string; total: number; sua: boolean }
+// 22/09 — TRÊS NÚMEROS DE "MENSAGEM" QUE NÃO BATEM, DE PROPÓSITO. O Emerson viu o
+// placar (17), o funil (184) e a conversão por canal (209) e estranhou. São três
+// recortes: conversas abertas NESTE MÊS; leads que estão HOJE no estado "Mensagem
+// enviada" (saem quando atendem, agendam ou aferem); e todos que JÁ receberam
+// mensagem, desde o início. Lição 20: duas contas com o mesmo nome é bug de rótulo.
+// Cada número passa a dizer o recorte embaixo, e o placar mostra também os
+// caminhões cobertos (`cobertos`, 0104): uma conversa com a frota cobre vários.
+type PlacarItem = { unidade: string; total: number; cobertos?: number; sua: boolean }
 
 const MEDALHAS = ['🥇', '🥈', '🥉']
 
@@ -49,7 +56,10 @@ function Placar() {
       <div className="flex items-center gap-2 mb-4">
         <Trophy size={16} className="text-lucro" strokeWidth={2.3} />
         <span className="text-xs font-bold uppercase tracking-wide text-ink-4">
-          Mensagens enviadas em {mesAtual()}
+          Conversas de WhatsApp abertas em {mesAtual()}
+        </span>
+        <span className="text-[11px] text-ink-4 ml-auto" title="Cada clique em Enviar WhatsApp é uma conversa e conta 1 na cota, mesmo cobrindo vários caminhões da frota">
+          este mês · uma por envio
         </span>
       </div>
 
@@ -66,7 +76,14 @@ function Placar() {
                   {item.unidade}
                   {item.sua && <span className="badge ml-2 align-middle">VOCÊS</span>}
                 </span>
-                <span className="text-lg font-extrabold text-ink tabular-nums">{item.total}</span>
+                <span className="text-lg font-extrabold text-ink tabular-nums">
+                  {item.total}
+                  {(item.cobertos ?? 0) > item.total && (
+                    <span className="text-xs font-semibold text-ink-4 ml-2" title="Caminhões cobertos: a conversa com a frota fala de vários de uma vez">
+                      · {item.cobertos} caminhões
+                    </span>
+                  )}
+                </span>
               </div>
               {/* Barra = medidor: trilho num tom um passo acima do cartão (visível mesmo
                   vazio) e preenchimento sempre no verde da marca. Antes o preenchimento de
@@ -305,7 +322,11 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 card p-5">
-              <h2 className="text-sm font-extrabold text-ink mb-4">Funil de conversão</h2>
+              <h2 className="text-sm font-extrabold text-ink mb-1">Funil de conversão</h2>
+              <p className="text-xs text-ink-4 mb-3">
+                Como cada caminhão está <b className="text-ink-6">hoje</b>, desde o início do app. Quem recebeu mensagem e
+                depois atendeu, agendou ou aferiu já não conta em "Mensagem enviada".
+              </p>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={funil} layout="vertical" margin={{ left: 8, right: 24 }}>
                   <CartesianGrid horizontal={false} stroke="#232c40" />
@@ -336,7 +357,8 @@ export default function Dashboard() {
             <div className="card p-5">
               <h2 className="text-sm font-extrabold text-ink mb-1">Conversão por canal</h2>
               <p className="text-xs text-ink-4 mb-4">
-                De quem foi alcançado, quantos vieram aferir depois.
+                De quem foi alcançado, quantos vieram aferir depois — <b className="text-ink-6">desde o início</b>, dentro
+                dos 12 meses da régua. Aqui entram também os que já atenderam ou aferiram.
               </p>
 
               <div className="mb-4">
@@ -350,7 +372,7 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-ink-4">
                   {conv.mensagem.aferiram.toLocaleString('pt-BR')} de{' '}
-                  {conv.mensagem.alcancados.toLocaleString('pt-BR')} que receberam
+                  {conv.mensagem.alcancados.toLocaleString('pt-BR')} que já receberam mensagem
                 </p>
               </div>
 
