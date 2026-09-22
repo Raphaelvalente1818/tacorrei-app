@@ -311,7 +311,7 @@ export default function Dashboard() {
               régua; só o placar acima fala do mês. O Emerson perguntou "de qual período?"
               — a resposta tem que estar na tela, não na cabeça de quem lê. */}
           <p className="text-[11px] text-ink-4 mb-2">
-            Situação de <b className="text-ink-6">hoje</b>, desde o início do app · caminhões dentro dos 12 meses da régua
+            Como está <b className="text-ink-6">hoje</b> cada caminhão da base. Vencido há mais de 12 meses fica de fora.
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatTile icon={Users} label="Leads totais" value={total} accent="#3f57ff" />
@@ -330,8 +330,8 @@ export default function Dashboard() {
             <div className="lg:col-span-2 card p-5">
               <h2 className="text-sm font-extrabold text-ink mb-1">Funil de conversão</h2>
               <p className="text-xs text-ink-4 mb-3">
-                Como cada caminhão está <b className="text-ink-6">hoje</b>, desde o início do app. Quem recebeu mensagem e
-                depois atendeu, agendou ou aferiu já não conta em "Mensagem enviada".
+                Como está <b className="text-ink-6">hoje</b> cada caminhão. Quem recebeu mensagem e depois atendeu,
+                agendou ou aferiu já não conta em "Mensagem enviada".
               </p>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={funil} layout="vertical" margin={{ left: 8, right: 24 }}>
@@ -363,8 +363,8 @@ export default function Dashboard() {
             <div className="card p-5">
               <h2 className="text-sm font-extrabold text-ink mb-1">Conversão por canal</h2>
               <p className="text-xs text-ink-4 mb-4">
-                De quem foi alcançado, quantos vieram aferir depois — <b className="text-ink-6">desde o início</b>, dentro
-                dos 12 meses da régua. Aqui entram também os que já atenderam ou aferiram.
+                De quem foi alcançado <b className="text-ink-6">alguma vez</b>, quantos vieram aferir depois. Aqui
+                entram também os que já atenderam ou aferiram.
               </p>
 
               <div className="mb-4">
