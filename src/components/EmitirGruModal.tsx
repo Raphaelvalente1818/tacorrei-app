@@ -1,14 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { X, FileText, Copy, Check, MessageCircle } from 'lucide-react'
+import { X, FileText, Copy, Check, MessageCircle, Bookmark } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 // "Emitir GRU" — a guia é emitida no portal do Inmetro, que tem CAPTCHA e é POST
 // (não dá para pré-preencher pela URL). O Aferi+ reúne os dados que a operadora hoje
 // cata de duas páginas, diz o que falta, deixa completar o que só está no CRLV
-// (CPF/CNPJ, chassi, ano) e abre o portal com os dados à mão para copiar campo a campo.
-// A pessoa marca o "não sou robô" — isso é sempre ela. Toda a lógica vem de
-// dados_gru()/salvar_dados_gru(): o documento nunca trafega pelo obter_lead. Ao abrir
-// o portal, dados_gru(lead, true) registra "GRU solicitada" no histórico do lead.
+// (CPF/CNPJ, chassi, ano) e abre o portal com os dados na área de transferência.
+// Lá, o favorito "Preencher GRU (Aferi+)" (abaixo) lê esse bloco e preenche os campos
+// sozinho. A pessoa marca o "não sou robô" e clica em Buscar — isso é sempre ela;
+// o favorito NÃO submete o formulário nem toca no CAPTCHA. Toda a lógica de dados
+// vem de dados_gru()/salvar_dados_gru(): o documento nunca trafega pelo obter_lead.
+// Ao abrir o portal, dados_gru(lead, true) registra "GRU solicitada" no histórico.
 
 type Resumo = {
   documento: string | null
@@ -24,6 +26,15 @@ type DadosGru = {
   resumo: Resumo
   campos: Record<string, string>
 }
+
+// O favorito ("bookmarklet"). Lê o bloco "Rótulo: valor" da área de transferência
+// (ou pede para colar), preenche os campos do formulário pelos nomes reais (CakePHP,
+// data[Model][campo]) e dispara input/change para o site reagir. Fixa Brasil /
+// emplacado no Brasil e deduz CPF×CNPJ pelo tamanho do documento. Rola até o
+// "não sou robô" e para ali. String.raw preserva as barras dos regex.
+const BOOKMARKLET =
+  'javascript:' +
+  String.raw`(async()=>{ const map={'cpf/cnpj':'data[CrVeiculoProprietario][nr_identificacao]','placa':'data[CrVeiculo][ds_placa]','renavam':'data[CrVeiculo][ds_renavam]','chassi':'data[CrVeiculo][ds_chassi]','ano':'data[CrVeiculo][dt_ano]'}; let txt=''; try{txt=await navigator.clipboard.readText()}catch(e){} if(!txt||!/placa/i.test(txt)){txt=prompt('Cole aqui o bloco copiado do Aferi+ (Ctrl+V):','')||''} if(!txt)return; const vals={}; txt.split(/\r?\n/).forEach(l=>{const m=l.match(/^\s*([^:]+):\s*(.*?)\s*$/);if(m)vals[m[1].trim().toLowerCase()]=m[2]}); const set=(name,val)=>{const el=document.querySelector('[name="'+name+'"]');if(!el||val==null||val==='')return false;el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return true}; set('data[CrVeiculoProprietario][pai_id]','2'); set('data[CrVeiculo][pai_id]','2'); set('data[CrVeiculo][vet_id]','1'); const doc=(vals['cpf/cnpj']||'').replace(/\D/g,''); if(doc.length===11)set('data[CrVeiculoProprietario][tp_pessoa]','1');else if(doc.length===14)set('data[CrVeiculoProprietario][tp_pessoa]','2'); let n=0; if(set(map['cpf/cnpj'],doc))n++; for(const k of ['placa','renavam','chassi','ano']){if(set(map[k],(vals[k]||'').trim()))n++} const cap=document.querySelector('.g-recaptcha,iframe[src*="recaptcha"]'); if(cap)cap.scrollIntoView({behavior:'smooth',block:'center'}); alert('Aferi+: '+n+' campo(s) preenchido(s). Agora marque "Não sou um robô" e clique em Buscar.');})();`
 
 function tipoDocumento(doc: string): string {
   const d = doc.replace(/\D/g, '')
@@ -105,23 +116,27 @@ export default function EmitirGruModal({
     try {
       await navigator.clipboard.writeText(texto)
       setCopiado(rotulo)
-      setTimeout(() => setCopiado((c) => (c === rotulo ? null : c)), 1500)
+      setTimeout(() => setCopiado((c) => (c === rotulo ? null : c)), 1800)
     } catch {
       setErro('Não consegui copiar automaticamente — selecione e copie à mão.')
     }
   }
 
-  async function abrirInmetro() {
-    if (!dados) return
-    const r = dados.resumo
-    const bloco = [
+  // O bloco copiado é o que o favorito lê: uma linha "Rótulo: valor" por campo.
+  function blocoParaColar(d: DadosGru): string {
+    const r = d.resumo
+    return [
       `CPF/CNPJ: ${r.documento ?? ''}`,
-      `Placa: ${dados.campos['data[CrVeiculo][ds_placa]'] ?? r.placa ?? ''}`,
+      `Placa: ${d.campos['data[CrVeiculo][ds_placa]'] ?? r.placa ?? ''}`,
       `RENAVAM: ${r.renavam ?? ''}`,
       `Chassi: ${r.chassi ?? ''}`,
       `Ano: ${r.ano_fabricacao ?? ''}`,
     ].join('\n')
-    await copiar(bloco, 'tudo')
+  }
+
+  async function abrirInmetro() {
+    if (!dados) return
+    await copiar(blocoParaColar(dados), 'tudo')
     window.open(dados.url, '_blank', 'noopener')
     await carregar(true) // registra "GRU solicitada" no histórico
     onSaved()
@@ -152,8 +167,8 @@ export default function EmitirGruModal({
           </button>
         </div>
         <p className="text-xs text-ink-4 mb-4">
-          A guia é emitida no site do Inmetro (com “não sou robô”). O Aferi+ junta os dados e abre o portal — você
-          confere, copia e emite.
+          A guia é emitida no site do Inmetro (com “não sou robô”). O Aferi+ junta os dados, abre o portal e o
+          favorito preenche os campos — você confere, marca o “não sou robô” e emite.
         </p>
 
         {carregando ? (
@@ -253,10 +268,10 @@ export default function EmitirGruModal({
                     <b className="text-ink">1.</b> Clique em <b>Copiar dados e abrir Inmetro</b> — o portal abre numa nova aba.
                   </li>
                   <li>
-                    <b className="text-ink">2.</b> No portal, cole cada campo (ou use o favorito “Preencher GRU (Aferi+)”).
+                    <b className="text-ink">2.</b> No portal, clique no favorito <b>Preencher GRU (Aferi+)</b> — os campos se preenchem sozinhos.
                   </li>
                   <li>
-                    <b className="text-ink">3.</b> Marque <b>“Não sou um robô”</b> e clique em <b>Buscar</b>. Isso é sempre você.
+                    <b className="text-ink">3.</b> Confira, marque <b>“Não sou um robô”</b> e clique em <b>Buscar</b>. Isso é sempre você.
                   </li>
                 </ol>
                 <button
@@ -266,8 +281,27 @@ export default function EmitirGruModal({
                   {copiado === 'tudo' ? 'Copiado! Abrindo Inmetro…' : 'Copiar dados e abrir Inmetro'}
                 </button>
                 <p className="text-xs text-ink-4 mt-2">
-                  Cada campo acima tem um botão de copiar, se preferir um a um. Ao abrir, fica registrado no histórico: “GRU solicitada”.
+                  Ao abrir, fica registrado no histórico: “GRU solicitada”. Sem o favorito, cada campo acima tem um botão de copiar.
                 </p>
+
+                <details className="mt-3 rounded-xl border border-line px-3 py-2 text-sm">
+                  <summary className="cursor-pointer font-bold text-ink-6 flex items-center gap-1.5">
+                    <Bookmark size={15} /> Instalar o favorito “Preencher GRU (Aferi+)” — uma vez só
+                  </summary>
+                  <ol className="mt-2 space-y-1.5 text-xs text-ink-6">
+                    <li><b className="text-ink">1.</b> Clique em <b>Copiar código do favorito</b> (abaixo).</li>
+                    <li><b className="text-ink">2.</b> No Chrome, mostre a barra de favoritos (<b>Ctrl+Shift+B</b>), clique com o botão direito nela → <b>Adicionar página…</b></li>
+                    <li><b className="text-ink">3.</b> Nome: <b>Preencher GRU (Aferi+)</b>. No campo URL, apague o que tiver e <b>cole</b> (Ctrl+V). Salvar.</li>
+                    <li><b className="text-ink">4.</b> Na 1ª vez, o Chrome pergunta se o site pode ler a área de transferência — <b>Permitir</b>.</li>
+                  </ol>
+                  <button
+                    onClick={() => copiar(BOOKMARKLET, 'fav')}
+                    className="mt-2 flex items-center gap-1.5 border border-line bg-card text-ink-6 text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors"
+                  >
+                    {copiado === 'fav' ? <Check size={14} className="text-brand" /> : <Copy size={14} />}
+                    {copiado === 'fav' ? 'Código copiado' : 'Copiar código do favorito'}
+                  </button>
+                </details>
               </div>
             )}
           </>
