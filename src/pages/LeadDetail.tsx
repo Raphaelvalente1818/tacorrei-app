@@ -22,6 +22,7 @@ import RegistrarLigacaoForm from '../components/RegistrarLigacaoForm'
 import AgendarAfericaoModal from '../components/AgendarAfericaoModal'
 import RegistrarAfericaoModal from '../components/RegistrarAfericaoModal'
 import ConfirmarModal from '../components/ConfirmarModal'
+import EmitirGruModal from '../components/EmitirGruModal'
 
 const VALIDADE_ANOS = 2
 
@@ -292,6 +293,7 @@ export default function LeadDetail() {
   const [confirmarTelefone, setConfirmarTelefone] = useState(false)
   const [confirmarDono, setConfirmarDono] = useState(false)
   const [showAferido, setShowAferido] = useState(false)
+  const [showGru, setShowGru] = useState(false)
   // 14/09 — Quando a operadora registra "Já aferiu no concorrente", a data do lead
   // pula dois anos para a frente e ele sai da régua DELA na mesma hora. O recarregar
   // vinha vazio e a tela virava "Lead não encontrado" — parecia que o app tinha comido
@@ -1106,6 +1108,13 @@ export default function LeadDetail() {
               >
                 <CalendarPlus size={16} /> Agendar aferição
               </button>
+              <button
+                onClick={() => setShowGru(true)}
+                className="flex items-center gap-1.5 border border-brand/50 bg-brand/10 text-brand text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-brand/20 transition-colors"
+                title="Reunir os dados e emitir a guia (GRU) no site do Inmetro"
+              >
+                <FileText size={16} /> Emitir GRU
+              </button>
               {/* Fecha o ciclo: grava a data do serviço em `data_ultima_afericao`,
                   o lead sai da fila e volta sozinho daqui a 2 anos.
                   0095 — só fica ACESO depois que a aferição existe, e aí mostra a data.
@@ -1408,6 +1417,15 @@ export default function LeadDetail() {
             setShowAferido(false)
             carregar()
           }}
+        />
+      )}
+      {showGru && (
+        <EmitirGruModal
+          leadId={lead.id}
+          placa={lead.placa_veiculo}
+          telefone={lead.telefone}
+          onClose={() => setShowGru(false)}
+          onSaved={() => carregar()}
         />
       )}
       {confirmacao?.tipo === 'contato' && (
