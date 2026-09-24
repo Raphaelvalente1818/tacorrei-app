@@ -1,0 +1,28 @@
+-- 0109: registro do complemento da base "tacorrei ETC e tac diadema SBC 3" (24/09/2026)
+-- Unidade: São Bernardo do Campo (265f0c74-123e-4886-9683-b70793c30b61)
+-- Abas usadas: "TAC TAcorrei" e "ETC TAcorrei" (as demais abas foram ignoradas a pedido).
+--
+-- Esta migration NÃO contém dados de clientes (regra 12). A carga foi feita pelo
+-- fluxo de staging (public._carga_sbc3, jsonb em partes), aplicada em transação
+-- única e a tabela de staging foi removida ao final.
+--
+-- O que foi feito (somente preenchimento de campos vazios, nenhum lead alterado
+-- fora disso):
+--   placas na planilha ............ 6.686 (todas já existiam na unidade SBC)
+--   documento preenchido .......... 6.686 (CPF/CNPJ, 11 ou 14 dígitos)
+--   e-mail preenchido ............. 3.146 (regex básico)
+--   endereço preenchido ........... 6.686
+--   CEP preenchido ................ 6.684 (8 dígitos; 2 sem CEP na planilha)
+--   telefone preenchido ...........     1 (DDD válido, celular/fixo, sem dígitos
+--                                        repetidos, não compartilhado por >2 placas)
+--
+-- O que NÃO foi alterado, de propósito:
+--   data_ultima_afericao, posto, status, origem, empresa_id
+--   (placas ETC seguem sem empresa criada; 106 placas de Ribeirão Pires
+--   permanecem na unidade SBC — apenas anotado).
+--
+-- Linha registrada em public.importacoes:
+--   rotulo = 'Complemento tacorrei ETC e TAC Diadema/SBC 3 (24/09)'
+--
+-- Conferência pós-carga: public.conferencia_contagens() = 36/36 OK.
+select 1;
