@@ -1,0 +1,32 @@
+-- 0107 — Santo André: complemento da base Lacre de 13/09 (24/09/2026)
+--
+-- ATENÇÃO: este arquivo NÃO contém os dados dos clientes.
+-- Regra do projeto: placas e dados de frotas de clientes nunca vão para o repositório git.
+--
+-- O que era: a planilha `lacre inmetro13setembro.xlsx` (266 empresas ETC, 2.899 placas) foi
+-- carregada na 0090 por `importar_base_empresas`, que cria a empresa e a placa mas NÃO grava
+-- documento, renavam, rntrc, e-mail, endereço nem CEP na placa (e três dessas colunas nem
+-- existiam em 13/09 — nasceram na 0097 e na 0105). Conferido em 24/09: as 266 empresas e as
+-- 2.899 placas estavam todas em Santo André, ligadas à empresa certa, e as 2.899 estavam
+-- sem documento, sem renavam, sem rntrc, sem e-mail, sem endereço e sem CEP.
+--
+-- O que foi feito (um bloco `do $$ … $$`, personificando o Raphael, com a planilha numa
+-- tabela de apoio apagada na mesma transação):
+--   * casamento por unidade + CNPJ da empresa + placa normalizada: 2.899 de 2.899;
+--   * preenchimento SÓ ONDE ESTAVA VAZIO:
+--       documento (CNPJ da empresa) 2.899 · renavam (11 dígitos) 2.899 · rntrc 2.899 ·
+--       e-mail 2.712 · endereço ("LOGRADOURO, NUMERO COMPLEMENTO - BAIRRO") 2.899 · CEP 2.899;
+--   * empresas: 0 e-mails e 0 telefones — as 28 sem e-mail no banco também não têm na planilha;
+--   * data de aferição e posto NÃO foram tocados: a 0093 já trouxe dado mais novo e a regra é
+--     "registro mais novo ganha";
+--   * linha em `public.importacoes` com o resumo por coluna.
+--
+-- Conferência depois: public.conferencia_contagens() → 36/36 ok.
+-- Santo André depois disto: 7.553 placas; 3.649 com documento; 7.539 com renavam;
+-- 1.806 já têm CPF/CNPJ + RENAVAM + data (para a GRU falta só o chassi, que só vem do CRLV).
+--
+-- Lição que vale para as próximas cidades: toda carga feita por `importar_base_empresas`
+-- antes da 0105 precisa deste complemento; a lista é a das linhas de `importacoes` com
+-- rótulo de empresa anteriores a 23/09.
+
+select 'ver comentario acima — dados do cliente ficam fora do repositorio' as nota;
