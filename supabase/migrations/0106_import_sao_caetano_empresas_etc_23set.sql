@@ -1,0 +1,41 @@
+-- 0106 — São Caetano do Sul: empresas ETC (RNTRC) e placas extras (23/09/2026)
+--
+-- ATENÇÃO: este arquivo NÃO contém os dados dos clientes.
+-- Regra do projeto: placas e dados de frotas de clientes nunca vão para o repositório git.
+-- O conteúdo real foi aplicado direto no banco, num único bloco `do $$ ... $$` que
+-- (a) personifica o Raphael, (b) monta o payload jsonb a partir das abas
+-- `etc tac sao caetano` (118 empresas) e `etc são caetano` (52 empresas) da planilha
+-- `base sao caetano.xlsx`, cruzadas com a aba `Planilha5` (data/posto de cada placa),
+-- (c) chama `public.importar_base_empresas(v, '146237d6-…', 'prospecto')`,
+-- (d) completa `documento` (CNPJ da empresa) e `renavam` (11 dígitos) só onde estavam
+-- vazios, e (e) registra a linha em `public.importacoes`.
+--
+-- Contexto: a base de autônomos de São Caetano (378 placas com CPF) já estava 100%
+-- importada. Das 918 placas consultadas no Inmetro, as 377 com certificado já estavam no
+-- banco; as 541 restantes não têm certificado. A lacuna real era outra: 216 placas de CNPJ
+-- estavam no banco sem `empresa_id`, porque as empresas ETC nunca tinham sido modeladas.
+--
+-- Resultado (unidade Santo André, situação prospecto):
+--   169 empresas novas (por CNPJ)
+--   216 placas existentes ligadas à sua empresa (vinculados) — exatamente as 216 soltas
+--   374 placas novas, todas fora da fila (sem tacógrafo):
+--       266 consultadas no Inmetro sem certificado ("NENHUM RESULTADO")
+--       108 nunca consultadas (aba larga, marcadas "0")
+--   374 receberam documento (CNPJ) e RENAVAM; 0 movidas, 0 ignoradas
+--   2 placas deixadas de fora de propósito (GAV1H46, IZT7A78): já existem na unidade
+--   São Bernardo com aferição feita lá — importar em Santo André criaria duplicata.
+--
+-- Conferência depois da importação:
+--   public.conferencia_contagens() → 36/36 ok
+--   placas de CNPJ em Santo André sem empresa_id: 0
+--
+-- Aprendizado que vale para as próximas cidades:
+--   * A aba larga do RNTRC (sem cabeçalho) tem o mesmo layout da aba normal: colunas 0–17
+--     são os dados da empresa, depois trios PLACAn/TIPOn/RENAVAMn a partir da coluna 18,
+--     e a partir da coluna 320 trios (data, posto, situação) da consulta ao Inmetro.
+--   * Na Planilha5 a coluna Data traz "NENHUM RESULTADO" para placa sem certificado —
+--     não é data; tem que virar posto='NENHUM RESULTADO' + data nula.
+--   * `importar_base_empresas` não grava documento nem renavam nas placas novas;
+--     o complemento vem num update separado, só onde está vazio.
+
+select 'ver comentario acima — dados do cliente ficam fora do repositorio' as nota;
