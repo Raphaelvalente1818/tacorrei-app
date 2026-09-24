@@ -290,9 +290,11 @@ export default function EmitirGruModal({
                   </summary>
                   <ol className="mt-2 space-y-1.5 text-xs text-ink-6">
                     <li><b className="text-ink">1.</b> Clique em <b>Copiar código do favorito</b> (abaixo).</li>
-                    <li><b className="text-ink">2.</b> No Chrome, mostre a barra de favoritos (<b>Ctrl+Shift+B</b>), clique com o botão direito nela → <b>Adicionar página…</b></li>
-                    <li><b className="text-ink">3.</b> Nome: <b>Preencher GRU (Aferi+)</b>. No campo URL, apague o que tiver e <b>cole</b> (Ctrl+V). Salvar.</li>
-                    <li><b className="text-ink">4.</b> Na 1ª vez, o Chrome pergunta se o site pode ler a área de transferência — <b>Permitir</b>.</li>
+                    <li><b className="text-ink">2.</b> Na barra de endereço do Chrome digite <b>chrome://bookmarks</b> e aperte Enter.</li>
+                    <li><b className="text-ink">3.</b> No canto superior direito da página Favoritos, clique nos <b>três pontinhos ⋮</b> → <b>Adicionar novo favorito</b>.</li>
+                    <li><b className="text-ink">4.</b> Nome: <b>Preencher GRU (Aferi+)</b>. No campo URL, <b>cole</b> (Ctrl+V) — tem que começar com <b>javascript:</b>. Salvar.</li>
+                    <li><b className="text-ink">5.</b> Para ver a barra de favoritos: menu ⋮ do Chrome → <b>Favoritos e listas</b> → <b>Mostrar barra de favoritos</b>.</li>
+                    <li><b className="text-ink">6.</b> Na 1ª vez que clicar no favorito (na aba do Inmetro), o Chrome pergunta se o site pode ler a área de transferência — <b>Permitir</b>.</li>
                   </ol>
                   <button
                     onClick={() => copiar(BOOKMARKLET, 'fav')}
