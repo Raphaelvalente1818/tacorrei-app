@@ -1,0 +1,26 @@
+-- 0110: registro do complemento chassi / ano de fabricação / RENAVAM (24/09/2026)
+-- Planilha "placas com chassi.xlsx": 375 placas com certificado vencendo nos próximos
+-- 30 dias (consulta Inmetro + CRLV). Unidades: São Bernardo 252, Santo André 123.
+--
+-- Esta migration NÃO contém dados de clientes (regra 12). Carga pelo fluxo de
+-- staging (public._carga_chassi), aplicada em transação única; staging removido.
+--
+-- Casamento por placa normalizada: 375 de 375 encontradas, uma por placa, nenhuma
+-- com chassi anterior. Onde o banco já tinha RENAVAM (181 placas) bateu 100% com a
+-- planilha — usado como prova de que a linha é a mesma.
+--
+-- Preenchido SOMENTE onde vazio:
+--   chassi (17 caracteres, sem I/O/Q) ...... 358  (16 "sem registro" + 1 inválido, 14 dígitos)
+--   ano_fabricacao (1950..2100) ............ 359
+--   renavam (11 dígitos) ................... 178
+--
+-- Não alterado: data_ultima_afericao, posto, status, origem, documento, contato.
+--
+-- Linhas em public.importacoes:
+--   'Chassi/ano/RENAVAM — placas a vencer em 30 dias (24/09) — parte SBC'
+--   'Chassi/ano/RENAVAM — placas a vencer em 30 dias (24/09) — parte Santo André'
+--
+-- Conferência pós-carga: public.conferencia_contagens() = 36/36 OK.
+-- Resultado para a GRU: 147 placas já com CPF/CNPJ + RENAVAM + chassi + ano
+-- (Santo André 83, São Bernardo 64); 211 com chassi mas ainda sem documento.
+select 1;
