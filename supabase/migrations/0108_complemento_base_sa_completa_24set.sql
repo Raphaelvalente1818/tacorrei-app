@@ -1,0 +1,40 @@
+-- 0108 — Santo André: complemento "Base de Clientes" (30) e "base santo andre Completa e ajustada" (24/09/2026)
+--
+-- ATENÇÃO: este arquivo NÃO contém os dados dos clientes.
+-- Regra do projeto: placas e dados de frotas de clientes nunca vão para o repositório git.
+--
+-- 1) `Base de Clientes Santo André.xlsx` — 30 linhas, todas já no banco (Santo André).
+--    Preenchido só onde estava vazio: CPF 30 · e-mail 5. Datas/posto intocados.
+--    Linha em `public.importacoes` ("Complemento Base de Clientes Santo André 24/09").
+--
+-- 2) `base santo andre Completa e ajustada.xlsx` — 2.047 donos (pessoa física) com 2.442 placas
+--    (2.047 PLACA1 + 395 secundárias). É a mesma fonte da carga original de Santo André, mas a
+--    carga original não gravou CPF, e-mail, endereço nem CEP. Conferido antes de carregar:
+--    as 2.047 PLACA1 estavam todas em Santo André (0 em outra unidade); 2.017 sem CPF;
+--    2.042 sem e-mail; 2.047 sem endereço/CEP; 384 com telefone "SEM TELEFONE" (a planilha
+--    também não tem telefone para essas 384 — nada a preencher).
+--    RENAVAM na planilha veio sem os zeros à esquerda (9 dígitos) → lpad 11 antes de comparar.
+--
+--    a) Complemento das 2.047 PLACA1 (bloco `do $$ … $$`, staging apagado na transação),
+--       preenchimento SÓ ONDE ESTAVA VAZIO:
+--         documento (CPF) 2.017 · e-mail 591 (596 na planilha, 5 já tinham) ·
+--         endereço 2.047 · CEP 2.047 · telefone 0.
+--       Data de aferição e posto NÃO tocados (regra "registro mais novo ganha").
+--       Linha em `importacoes`: "Complemento base santo andre Completa e ajustada (PLACA1) 24/09".
+--
+--    b) 395 placas secundárias não existiam no banco (nenhuma consultada no Inmetro).
+--       Decisão do Raphael: criar só as que precisam de tacógrafo → 237 criadas
+--       (Automotor 185 · Caminhão simples 27 · Caminhão trator 16 · Caminhão leve 9).
+--       Ficaram de fora 158: Implemento 83, Semi-reboque 31, Reboque 1 (sem tacógrafo) e
+--       Caminhonete/Furgão até 3,49t 42 + Caminhoneta 1 (abaixo de 3,5t).
+--       Cada placa criada copia da PLACA1 o dono (nome, telefone, RNTRC, CPF, e-mail, endereço, CEP),
+--       recebe RENAVAM e modelo = tipo da planilha, origem 'outro', status 'novo',
+--       tem_tacografo=false, sem data/posto (fora da fila até consulta) e observação
+--       "Sem consulta ao INMETRO | placa secundária de <PLACA1>".
+--       Linha em `importacoes`: "Placas secundárias base santo andre Completa e ajustada 24/09".
+--
+-- Conferência depois: public.conferencia_contagens() → 36/36 ok.
+-- Santo André depois disto: 7.790 placas; 5.933 com documento; 3.675 com e-mail;
+-- 5.559 com endereço/CEP; 7.776 com renavam; 2.377 com CPF/CNPJ + RENAVAM + data.
+
+select 'ver comentario acima — dados do cliente ficam fora do repositorio' as nota;
