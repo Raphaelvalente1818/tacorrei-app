@@ -170,6 +170,13 @@ type Meta = {
     empresas: { nome: string; em_risco: number }[]
   }
   auditoria: Auditoria[]
+  // 0112 — cadastro completo por quem MARCOU a aferição (quem estava no balcão),
+  // no mês. Visível e cobrável; não entra em pontos, prêmio nem fechamento.
+  cadastro?: {
+    afericoes: number
+    completos: number
+    por_pessoa: { nome: string; afericoes: number; completos: number }[]
+  }
 }
 
 const CLASSE_LABEL: Record<Classe, string> = {
@@ -698,6 +705,55 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
               </div>
             )}
           </div>
+
+          {/* ── Cadastro no balcão (0112) ──────────────────────────────── */}
+          {meta.cadastro && meta.cadastro.afericoes > 0 && (() => {
+            const cad = meta.cadastro
+            const pct = (a: number, b: number) => (b === 0 ? '—' : `${Math.round((a / b) * 100)}%`)
+            return (
+              <div className="card overflow-hidden">
+                <div className="px-5 pt-5 pb-3 flex items-baseline justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-ink">
+                      {souOperadora ? 'Meu cadastro no balcão' : 'Cadastro completo no balcão'}
+                    </h2>
+                    <p className="text-xs text-ink-4 mt-1">
+                      Das aferições do mês, quantas saíram com CPF/CNPJ, chassi, RENAVAM e telefone confirmado com o dono.
+                      Não vale ponto: é o que vai fazer diferença daqui a dois anos, quando estes caminhões voltarem.
+                    </p>
+                  </div>
+                  <span className="text-2xl font-extrabold text-ink tabular-nums shrink-0">
+                    {pct(cad.completos, cad.afericoes)}
+                    <span className="text-xs font-semibold text-ink-4 ml-2">{num(cad.completos)} de {num(cad.afericoes)}</span>
+                  </span>
+                </div>
+                {!souOperadora && cad.por_pessoa.length > 0 && (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-ink-4 text-xs uppercase font-bold border-y border-line">
+                        <th className="px-5 py-3">Quem marcou</th>
+                        <th className="px-3 py-3 text-right">Aferições</th>
+                        <th className="px-3 py-3 text-right">Cadastro completo</th>
+                        <th className="px-5 py-3 text-right">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cad.por_pessoa.map((r) => (
+                        <tr key={r.nome} className="border-b border-line last:border-0">
+                          <td className="px-5 py-3 font-semibold text-ink">{r.nome}</td>
+                          <td className="px-3 py-3 text-right tabular-nums">{num(r.afericoes)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums">{num(r.completos)}</td>
+                          <td className={`px-5 py-3 text-right tabular-nums font-extrabold ${r.completos === r.afericoes ? 'text-emerald-300' : r.completos === 0 ? 'text-rose-300' : 'text-amber-300'}`}>
+                            {pct(r.completos, r.afericoes)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })()}
 
           {/* ── Carteira defendida + risco ─────────────────────────────── */}
           <div className="grid md:grid-cols-2 gap-4">

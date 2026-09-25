@@ -812,6 +812,21 @@ export default function LeadDetail() {
                   Última aferição: {lead.posto_afericao}
                 </span>
               )}
+              {/* 0112 — o cadastro deste caminhão, na definição única do banco.
+                  Visível sempre, para ela ver ANTES de ligar o que vale perguntar.
+                  Não é botão: o lugar de completar é o balcão (modal do Aferido) e
+                  o "Emitir GRU". Não pontua — aparece na Meta, por quem marcou. */}
+              {lead.cadastro && (
+                lead.cadastro.completo ? (
+                  <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30" title="CPF/CNPJ, chassi, placa, RENAVAM e telefone confirmado com o dono">
+                    Cadastro completo
+                  </span>
+                ) : (
+                  <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30" title="O que falta se completa no balcão, na hora de registrar a aferição">
+                    Cadastro: falta {lead.cadastro.faltando.join(', ')}
+                  </span>
+                )
+              )}
               {/* 0095 — este caminhão roda e afere em outra praça. Sai da fila, mas o
                   selo fica à vista com o desfazer do lado: se marcarem errado, quem
                   abrir a ficha vê na hora por que ele sumiu do dia a dia. */}
@@ -1412,6 +1427,8 @@ export default function LeadDetail() {
       {showAferido && (
         <RegistrarAfericaoModal
           caminhoneiroId={lead.id}
+          cadastro={lead.cadastro}
+          telefone={lead.telefone}
           onClose={() => setShowAferido(false)}
           onSaved={() => {
             setShowAferido(false)

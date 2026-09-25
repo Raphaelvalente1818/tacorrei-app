@@ -58,7 +58,6 @@ export interface Caminhoneiro {
   observacoes: string | null
   responsavel_id: string | null
   rntrc: string | null
-  renavam: string | null
   data_ultima_afericao: string | null
   data_ultimo_whatsapp: string | null
   tem_tacografo: boolean
@@ -94,6 +93,14 @@ export interface Caminhoneiro {
   // 0101 — informou que não é mais o dono. O cadastro é que está velho, não o lead.
   dono_trocou_em: string | null
   dono_trocou_por?: string | null
+  // 0105 — dados que a guia do Inmetro pede e que só estão no CRLV. Preenchidos
+  // no balcão (EmitirGruModal / RegistrarAfericaoModal) ou pela importação.
+  chassi?: string | null
+  ano_fabricacao?: number | null
+  renavam: string | null
+  // 0112 — "é este mesmo o número do dono?", confirmado com ele na frente. Cai
+  // sozinho se o telefone mudar por importação.
+  telefone_confirmado_em?: string | null
   // 0097 — NÃO existe campo `documento` aqui de propósito. A coluna existe no
   // banco (CPF do autônomo / CNPJ do dono) e é usada só pelo servidor: para
   // agrupar caminhões do mesmo dono e para consultar o Inmetro por documento.
@@ -164,9 +171,18 @@ export interface AfericaoFora {
 }
 
 // O que `obter_lead` devolve: o caminhão e, quando ele é de frota, a frota junto.
+// 0112 — o que falta no cadastro deste caminhão, na definição única do banco
+// (`faltas_cadastro`): CPF/CNPJ, chassi, placa, RENAVAM de 11 e telefone
+// confirmado. Visível na ficha, no Aferido e na Meta; não pontua.
+export interface CadastroDoLead {
+  completo: boolean
+  faltando: string[]
+}
+
 export type LeadComEmpresa = Caminhoneiro & {
   empresa?: EmpresaDoLead | null
   afericao_fora?: AfericaoFora | null
+  cadastro?: CadastroDoLead | null
 }
 
 export interface Ligacao {
