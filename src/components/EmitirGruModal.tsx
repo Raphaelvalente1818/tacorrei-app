@@ -288,11 +288,15 @@ export default function EmitirGruModal({
                   <summary className="cursor-pointer font-bold text-ink-6 flex items-center gap-1.5">
                     <Bookmark size={15} /> Instalar o favorito “Preencher GRU (Aferi+)” — uma vez só
                   </summary>
+                  {/* 28/09 — a ordem importa: a área de transferência guarda UMA coisa. Se a
+                      pessoa copia o código primeiro e depois copia "chrome://bookmarks" do
+                      guia para colar na barra, o código some. Apontado pelo Emerson. Então:
+                      abre a página de favoritos, começa o cadastro, e só aí copia e cola. */}
                   <ol className="mt-2 space-y-1.5 text-xs text-ink-6">
-                    <li><b className="text-ink">1.</b> Clique em <b>Copiar código do favorito</b> (abaixo).</li>
-                    <li><b className="text-ink">2.</b> Na barra de endereço do Chrome digite <b>chrome://bookmarks</b> e aperte Enter.</li>
-                    <li><b className="text-ink">3.</b> No canto superior direito da página Favoritos, clique nos <b>três pontinhos ⋮</b> → <b>Adicionar novo favorito</b>.</li>
-                    <li><b className="text-ink">4.</b> Nome: <b>Preencher GRU (Aferi+)</b>. No campo URL, <b>cole</b> (Ctrl+V) — tem que começar com <b>javascript:</b>. Salvar.</li>
+                    <li><b className="text-ink">1.</b> Abra uma <b>nova aba</b>, digite na barra de endereço <b>chrome://bookmarks</b> e aperte Enter.</li>
+                    <li><b className="text-ink">2.</b> No canto superior direito da página Favoritos, clique nos <b>três pontinhos ⋮</b> → <b>Adicionar novo favorito</b>. Nome: <b>Preencher GRU (Aferi+)</b>. Deixe a janelinha aberta.</li>
+                    <li><b className="text-ink">3.</b> Volte para <b>esta aba</b> e clique em <b>Copiar código do favorito</b> (abaixo).</li>
+                    <li><b className="text-ink">4.</b> Volte para a aba dos Favoritos e, no campo URL, <b>cole</b> (Ctrl+V) — tem que começar com <b>javascript:</b>. Salvar.</li>
                     <li><b className="text-ink">5.</b> Para ver a barra de favoritos: menu ⋮ do Chrome → <b>Favoritos e listas</b> → <b>Mostrar barra de favoritos</b>.</li>
                     <li><b className="text-ink">6.</b> Na 1ª vez que clicar no favorito (na aba do Inmetro), o Chrome pergunta se o site pode ler a área de transferência — <b>Permitir</b>.</li>
                   </ol>
