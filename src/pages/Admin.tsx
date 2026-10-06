@@ -20,7 +20,7 @@ import Trilha from './admin/Trilha'
 // Redesenho de 11/09 (PRD R3b): gestão e administração eram uma aba só. Agora:
 //   Meu dia        — as quatro perguntas da rotina do gestor. Tela inicial.
 //   Gestão         — o operacional de UMA unidade: Meta, Produção, Equipe,
-//                    Mensagens, Prêmio. O gestor vê a dele; o admin geral escolhe
+//                    Mensagens, Resultado. O gestor vê a dele; o admin geral escolhe
 //                    pelo "Visualizando" do menu (ou pelo seletor aqui, se em "Todas").
 //   Administração  — só admin geral: Unidades (painel + configuração), Cobertura,
 //                    Método, Acessos (equipe inteira).
@@ -73,7 +73,7 @@ export default function Admin() {
     { id: 'producao', label: 'Produção', icon: BarChart3 },
     { id: 'equipe', label: 'Equipe', icon: Users },
     { id: 'mensagens', label: 'Mensagens', icon: MessageCircle },
-    { id: 'premio', label: 'Prêmio', icon: Wallet },
+    { id: 'premio', label: 'Resultado', icon: Wallet },
     { id: 'registro', label: 'Registro', icon: History },
   ]
 

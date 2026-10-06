@@ -3,9 +3,11 @@ import { Lock, Plus, Wallet } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { botao, input, real } from './ui'
+import ResultadoDoMes from './ResultadoDoMes'
 
-// ── Prêmio ───────────────────────────────────────────────────────────────────
-// Os dois números que a operadora conhece desde o dia 1º: valor do ponto e teto do
+// ── Resultado ────────────────────────────────────────────────────────────────
+// Em cima, o RESULTADO DO MÊS (0113): o quadro por unidade e operadora com a
+// foto do dia 5. Embaixo, a regra do prêmio: os dois números que a operadora conhece desde o dia 1º: valor do ponto e teto do
 // mês, mais a fatia do bolo. Vigência por mês; mudança nunca vale no mês corrente
 // (o banco recusa para quem não é admin geral). Sem valor = mês de observação.
 // Quem edita: o admin geral; o gestor só se a unidade tiver a marcação liberada.
@@ -101,6 +103,8 @@ export default function Premio({ unidadeId }: { unidadeId: string }) {
 
   return (
     <div className="space-y-4">
+      <ResultadoDoMes unidadeId={unidadeId} />
+
       <div className="card p-5">
         <h2 className="text-sm font-extrabold text-ink mb-1 flex items-center gap-2">
           <Wallet size={16} className="text-brand" /> Regra em vigor neste mês

@@ -82,6 +82,8 @@ type Auditoria = {
   total: number
   operadora: string | null
   marcado_por: string | null
+  // 0113: resposta já gravada (responder_auditoria) — a auditoria pode ser feita aos poucos, até o dia 4
+  resposta?: { ok: boolean; obs: string | null; em: string } | null
 }
 
 // Parâmetros do prêmio vigentes na competência (parametros_unidade).
@@ -270,7 +272,9 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
   const [erro, setErro] = useState<string | null>(null)
 
   // Fechamento do mês: quem pode fechar é o admin geral ou o gestor da unidade.
-  // As respostas da auditoria ficam aqui até o botão; o banco só grava tudo junto.
+  // Cada resposta da auditoria é gravada na hora (responder_auditoria). A foto do
+  // mês é este botão: o gestor audita o que quiser e tira a foto; o que ficou sem
+  // resposta não anula ninguém (0113/0113d).
   const podeFechar = !souOperadora && (isAdmin || membro?.papel === 'admin_unidade')
   const [respostas, setRespostas] = useState<Record<string, { ok: boolean | null; obs: string }>>({})
   const [whatsappRestrito, setWhatsappRestrito] = useState(false)
@@ -307,24 +311,49 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
     setErroFechar(null)
   }, [competencia, unidadeId])
 
+  // As respostas já gravadas no banco aparecem marcadas.
+  useEffect(() => {
+    if (!meta) return
+    const r: Record<string, { ok: boolean | null; obs: string }> = {}
+    for (const a of meta.auditoria) if (a.resposta) r[a.id] = { ok: a.resposta.ok, obs: a.resposta.obs ?? '' }
+    setRespostas(r)
+  }, [meta])
+
+  async function gravarResposta(id: string, ok: boolean, obs: string) {
+    const { error } = await supabase.rpc('responder_auditoria', { p_ponto: id, p_ok: ok, p_obs: obs.trim() || null })
+    if (error) setErroFechar(error.message)
+  }
+
   function responder(id: string, ok: boolean) {
-    setRespostas((r) => ({ ...r, [id]: { ok, obs: r[id]?.obs ?? '' } }))
+    const obs = respostas[id]?.obs ?? ''
+    setRespostas((r) => ({ ...r, [id]: { ok, obs } }))
     setConfirmando(false)
+    setErroFechar(null)
+    void gravarResposta(id, ok, obs)
   }
 
   function anotar(id: string, obs: string) {
     setRespostas((r) => ({ ...r, [id]: { ok: r[id]?.ok ?? null, obs } }))
   }
 
+  function salvarAnotacao(id: string) {
+    const r = respostas[id]
+    if (r?.ok === null || r?.ok === undefined) return
+    void gravarResposta(id, r.ok, r.obs)
+  }
+
   async function fecharMes() {
     if (!meta || !unidadeId) return
     setFechando(true)
     setErroFechar(null)
-    const auditoria: RespostaAuditoria[] = meta.auditoria.map((a) => ({
-      ponto_id: a.id,
-      ok: respostas[a.id]?.ok === true,
-      obs: respostas[a.id]?.obs?.trim() || null,
-    }))
+    // Só o que foi respondido. O que ficou sem resposta não anula ninguém.
+    const auditoria: RespostaAuditoria[] = meta.auditoria
+      .filter((a) => respostas[a.id]?.ok === true || respostas[a.id]?.ok === false)
+      .map((a) => ({
+        ponto_id: a.id,
+        ok: respostas[a.id]!.ok === true,
+        obs: respostas[a.id]?.obs?.trim() || null,
+      }))
     const { error } = await supabase.rpc('fechar_mes', {
       p_unidade: unidadeId,
       p_competencia: competencia,
@@ -900,7 +929,7 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                 <p className="text-xs text-ink-4 mb-3">
                   {meta.auditoria.length} aferições sorteadas — sempre as mesmas para este mês. Conferir cada uma contra a ordem de serviço do posto.
                   Um registro falso anula o mês inteiro de quem marcou e de quem pontuou.
-                  {emFechamento && ' Responda as ' + meta.auditoria.length + ' e depois feche: a partir daí o número não muda mais.'}
+                  {emFechamento && ' Cada resposta é gravada na hora. Quando terminar, tire a foto do mês: a partir daí o número não muda mais, e o que for registrado depois pontua no mês corrente.'}
                 </p>
 
                 {meta.auditoria.length === 0 ? (
@@ -941,6 +970,7 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                                 <input
                                   value={r.obs}
                                   onChange={(e) => anotar(a.id, e.target.value)}
+                                  onBlur={() => salvarAnotacao(a.id)}
                                   placeholder="o que não bateu?"
                                   className="px-2 py-1 border border-rose-500/40 rounded-lg text-xs bg-card focus-ring outline-none w-44"
                                 />
@@ -999,11 +1029,11 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                       {!confirmando ? (
                         <button
                           type="button"
-                          disabled={faltam > 0 || fechando}
+                          disabled={fechando}
                           onClick={() => setConfirmando(true)}
                           className="px-4 py-2 rounded-xl bg-brand text-[#04120a] text-sm font-extrabold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                         >
-                          <Lock size={14} /> Fechar {rotuloMes(competencia)}
+                          <Lock size={14} /> Tirar a foto de {rotuloMes(competencia)} agora
                         </button>
                       ) : (
                         <>
@@ -1013,18 +1043,18 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                             onClick={fecharMes}
                             className="px-4 py-2 rounded-xl bg-emerald-500 text-[#04120a] text-sm font-extrabold disabled:opacity-40 flex items-center gap-2"
                           >
-                            <Check size={14} /> {fechando ? 'Fechando…' : 'Confirmar: fechar e não mudar mais'}
+                            <Check size={14} /> {fechando ? 'Fechando…' : 'Confirmar: tirar a foto e não mudar mais'}
                           </button>
                           <button type="button" disabled={fechando} onClick={() => setConfirmando(false)} className="px-3 py-2 rounded-xl border border-line text-sm text-ink-6 hover:bg-white/5">
                             Voltar
                           </button>
                         </>
                       )}
-                      {faltam > 0 && (
-                        <span className="text-xs text-ink-4">
-                          {faltam === 1 ? 'Falta responder 1 aferição.' : `Faltam responder ${faltam} aferições.`}
-                        </span>
-                      )}
+                      <span className="text-xs text-ink-4">
+                        {faltam > 0
+                          ? (faltam === 1 ? 'Falta responder 1 aferição' : `Faltam responder ${faltam} aferições`) + ' — o que ficar sem resposta não anula ninguém.'
+                          : 'Auditoria completa — pode tirar a foto.'}
+                      </span>
                     </div>
                   </div>
                 )}
