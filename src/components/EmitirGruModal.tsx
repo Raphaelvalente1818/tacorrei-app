@@ -297,7 +297,9 @@ export default function EmitirGruModal({
                     <li><b className="text-ink">2.</b> No canto superior direito da página Favoritos, clique nos <b>três pontinhos ⋮</b> → <b>Adicionar novo favorito</b>. Nome: <b>Preencher GRU (Aferi+)</b>. Deixe a janelinha aberta.</li>
                     <li><b className="text-ink">3.</b> Volte para <b>esta aba</b> e clique em <b>Copiar código do favorito</b> (abaixo).</li>
                     <li><b className="text-ink">4.</b> Volte para a aba dos Favoritos e, no campo URL, <b>cole</b> (Ctrl+V) — tem que começar com <b>javascript:</b>. Salvar.</li>
-                    <li><b className="text-ink">5.</b> Para ver a barra de favoritos: menu ⋮ do Chrome → <b>Favoritos e listas</b> → <b>Mostrar barra de favoritos</b>.</li>
+                    {/* 07/10 — "Mostrar barra de favoritos" não existe mais nesse nível do menu
+                        (foi para dentro de "Barra de favoritos ›"); o atalho resolve em qualquer versão. */}
+                    <li><b className="text-ink">5.</b> Se a barra de favoritos não aparecer embaixo do endereço, aperte <b>Ctrl+Shift+B</b> (liga e desliga). Pelo menu: ⋮ → <b>Favoritos e listas</b> → <b>Barra de favoritos</b> → <b>Mostrar sempre</b>.</li>
                     <li><b className="text-ink">6.</b> Na 1ª vez que clicar no favorito (na aba do Inmetro), o Chrome pergunta se o site pode ler a área de transferência — <b>Permitir</b>.</li>
                   </ol>
                   <button

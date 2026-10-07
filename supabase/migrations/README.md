@@ -16,6 +16,10 @@ aplicado — com o comentário que explica a decisão, que é a parte que mais v
 - **0065b** não tem arquivo: era só a correção do corpo da função da 0065, e a 0065 daqui
   já está corrigida.
 - **0070** e **0072** são só de dados (desfazer um teste, encerrar a unidade fictícia).
+- **0113, 0113b, 0113c, 0113d, 0113e** (06/10): a aba Resultado e a foto do mês nasceram em
+  uma noite e foram ajustadas no mesmo dia — sufixo de letra, mesma convenção da 0039a/0039b.
+  A 0113d **fotografa setembro/2026** (guardada por data: só roda em outubro/2026) e tira o job
+  do pg_cron; a 0113e fecha a leitura da `inmetro_consultas`. **A próxima é a 0114.**
 
 ## ⚠️ Arquivos com dados de cliente omitidos
 
@@ -38,3 +42,8 @@ Pelo mesmo motivo, nunca exportar dados do banco para dentro deste repositório.
 4. **Testar escrita sem sujar a base**: bloco `do $$ … raise exception 'ROLLBACK PROPOSITAL' $$`
    dentro da migration — o insert roda e a transação volta.
 5. **Validade do certificado = 2 anos**, em toda conta de vencimento.
+6. **Tabela nova nasce fechada**: `enable row level security` + `revoke all … from public, anon,
+   authenticated` na mesma migration, antes de receber dado — e criada **por migration**, nunca
+   pelo editor SQL do painel (a `inmetro_consultas` ficou dois dias legível por `anon`, 06/10).
+7. **Função chamada sem sessão** (pg_cron, script) não pode chamar nada que use
+   `is_equipe_ativa()`/`auth.uid()` — devolver a linha, não o resumo (lição da 0113b).
