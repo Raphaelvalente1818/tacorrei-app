@@ -22,16 +22,27 @@ import type { CadastroDoLead } from '../lib/database.types'
 // por esforço compra esforço, não resultado). Preenche se der, pula se não der.
 // O que foi preenchido fica visível na Meta, por quem marcou — e o gestor cobra.
 // O CPF entra por `salvar_dados_gru` (só escrita: a tela nunca o mostra de volta).
+//
+// 07/10 — CAMINHÃO DE FORA (conquista): a CNR7440 aferiu aqui e saiu com o
+// telefone do RNTRC sem ninguém confirmar. Quem vem do concorrente é exatamente
+// quem a gente não conhece — o número do cadastro é de quem dirige, não do dono.
+// Para esses, o telefone deixa de ser uma caixinha opcional no meio do azul e
+// vira a primeira pergunta, em destaque, com três respostas: é o número do dono,
+// ele deu outro, ou não deu para confirmar. Precisa escolher uma para confirmar
+// a aferição — mas "não consegui" é resposta válida (regra do Emerson: não
+// obrigar número, porque número obrigado vira número inventado).
 export default function RegistrarAfericaoModal({
   caminhoneiroId,
   cadastro,
   telefone,
+  conquista = false,
   onClose,
   onSaved,
 }: {
   caminhoneiroId: string
   cadastro?: CadastroDoLead | null
   telefone?: string | null
+  conquista?: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -57,6 +68,10 @@ export default function RegistrarAfericaoModal({
   const [chassi, setChassi] = useState('')
   const [foneOk, setFoneOk] = useState(false)
   const [foneNovo, setFoneNovo] = useState('')
+  // Conquista: a resposta sobre o celular. null = ainda não respondeu.
+  type RespostaFone = 'mesmo' | 'outro' | 'nao_deu'
+  const [respFone, setRespFone] = useState<RespostaFone | null>(null)
+  const perguntaFone = conquista && faltaFone && !outroPosto
 
   const hoje = (() => {
     const d = new Date()
@@ -68,6 +83,14 @@ export default function RegistrarAfericaoModal({
     e.preventDefault()
     if (data > hoje) {
       setError('A data da aferição não pode ser no futuro.')
+      return
+    }
+    if (perguntaFone && respFone === null) {
+      setError('Antes de confirmar: o celular do cadastro é do dono? Escolha uma das três respostas.')
+      return
+    }
+    if (perguntaFone && respFone === 'outro' && foneNovo.replace(/\D/g, '').length < 10) {
+      setError('Digite o número que ele deu, com DDD.')
       return
     }
     setSaving(true)
@@ -91,10 +114,11 @@ export default function RegistrarAfericaoModal({
           return
         }
       }
-      if (foneOk) {
+      const confirmarFone = perguntaFone ? respFone === 'mesmo' || respFone === 'outro' : foneOk
+      if (confirmarFone) {
         const { error: e2 } = await supabase.rpc('confirmar_telefone', {
           p_lead: caminhoneiroId,
-          p_telefone: foneNovo.trim() || null,
+          p_telefone: respFone === 'outro' || (!perguntaFone && foneOk) ? foneNovo.trim() || null : null,
         })
         if (e2) {
           setSaving(false)
@@ -132,7 +156,7 @@ export default function RegistrarAfericaoModal({
     onSaved()
   }
 
-  const temFaltas = !outroPosto && (faltaDoc || faltaChassi || faltaFone || faltaAno)
+  const temFaltas = !outroPosto && (faltaDoc || faltaChassi || (faltaFone && !perguntaFone) || faltaAno)
   const inputCls = 'w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none'
 
   return (
@@ -154,6 +178,37 @@ export default function RegistrarAfericaoModal({
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* 07/10 — caminhão de fora: o celular é a primeira pergunta, em destaque. */}
+          {perguntaFone && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
+                <Phone size={15} /> Caminhão novo na casa — confirme o celular do dono
+              </div>
+              <p className="text-[11px] text-ink-4 leading-snug">
+                O número do cadastro veio do RNTRC e costuma ser de quem dirige, não de quem decide. Ele está aqui: pergunte.
+                Daqui a dois anos é por esse número que a gente chama ele de volta.
+              </p>
+              <div className="space-y-1.5 text-sm">
+                {([
+                  { v: 'mesmo' as const, t: `O número ${telefone || 'do cadastro'} é do dono`, d: 'Confirma e segue.' },
+                  { v: 'outro' as const, t: 'Ele deu outro número', d: 'Digite abaixo; o cadastro é atualizado.' },
+                  { v: 'nao_deu' as const, t: 'Não deu para confirmar', d: 'Tudo bem — fica anotado que falta.' },
+                ]).map((o) => (
+                  <label key={o.v} className={`flex items-start gap-2 rounded-lg border p-2 cursor-pointer ${respFone === o.v ? 'border-amber-400/60 bg-amber-500/10' : 'border-line'}`}>
+                    <input type="radio" name="respFone" checked={respFone === o.v} onChange={() => { setRespFone(o.v); setError(null) }} className="mt-0.5" />
+                    <span>
+                      <span className="font-bold">{o.t}</span>
+                      <span className="block text-[11px] text-ink-4">{o.d}</span>
+                    </span>
+                  </label>
+                ))}
+                {respFone === 'outro' && (
+                  <input value={foneNovo} onChange={(e) => setFoneNovo(e.target.value)} inputMode="tel" placeholder="DDD + número" className={inputCls} autoFocus />
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 0112 — o que falta, em cima, com os campos. Some quando não falta nada
               (ou quando é aferição no concorrente: não há cadastro a aproveitar). */}
           {temFaltas && (
@@ -162,7 +217,7 @@ export default function RegistrarAfericaoModal({
                 <ClipboardCheck size={15} /> Ele está aqui — aproveite para completar o cadastro
               </div>
               <p className="text-[11px] text-ink-4 leading-snug">
-                Opcional. Faltam: {faltando.join(', ')}. O que você preencher agora vale daqui a dois anos, quando este
+                Opcional. Faltam: {faltando.filter((f) => !(perguntaFone && f === 'Telefone confirmado')).join(', ')}. O que você preencher agora vale daqui a dois anos, quando este
                 caminhão voltar para a fila.
               </p>
               {faltaDoc && (
@@ -177,7 +232,7 @@ export default function RegistrarAfericaoModal({
                   <input value={chassi} onChange={(e) => setChassi(e.target.value.toUpperCase())} placeholder="17 caracteres" className={inputCls} autoFocus={!faltaDoc} />
                 </div>
               )}
-              {faltaFone && (
+              {faltaFone && !perguntaFone && (
                 <div className="space-y-1.5">
                   <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
                     <input type="checkbox" checked={foneOk} onChange={(e) => setFoneOk(e.target.checked)} className="mt-0.5" />

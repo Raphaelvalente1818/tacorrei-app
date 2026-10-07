@@ -900,15 +900,20 @@ export default function LeadDetail() {
                 <p className="text-sm font-bold text-ink flex items-center gap-2">
                   <Building2 size={15} className="text-lucro" />
                   {lead.empresa.nome}
-                  <span
-                    className={`badge ${
-                      lead.empresa.situacao === 'contrato'
-                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
-                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    }`}
-                  >
-                    {lead.empresa.situacao === 'contrato' ? 'Com contrato' : 'A conquistar'}
-                  </span>
+                  {/* 07/10 — CNR7440 aferiu aqui e a ficha ainda dizia "A conquistar":
+                      o selo só olhava o contrato. Agora é o mesmo da aba Empresas:
+                      com contrato / pé na porta (algum caminhão já é nosso) / a conquistar. */}
+                  {lead.empresa.situacao === 'contrato' ? (
+                    <span className="badge bg-sky-500/15 text-sky-300 border-sky-500/30">Com contrato</span>
+                  ) : lead.empresa.algum_nosso ? (
+                    <span className="badge bg-emerald-500/15 text-emerald-300 border-emerald-500/30" title="Já temos pelo menos um caminhão desta empresa">
+                      Pé na porta
+                    </span>
+                  ) : (
+                    <span className="badge bg-amber-500/15 text-amber-300 border-amber-500/30" title="Nenhum caminhão desta empresa afere conosco">
+                      A conquistar
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-ink-4 mt-1">
                   {lead.empresa.veiculos.length} caminhã
@@ -1429,6 +1434,7 @@ export default function LeadDetail() {
           caminhoneiroId={lead.id}
           cadastro={lead.cadastro}
           telefone={lead.telefone}
+          conquista={!ehClienteDaCasa(lead)}
           onClose={() => setShowAferido(false)}
           onSaved={() => {
             setShowAferido(false)
