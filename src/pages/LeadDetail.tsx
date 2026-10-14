@@ -304,6 +304,13 @@ export default function LeadDetail() {
   // edição inline
   const [editTelefone, setEditTelefone] = useState(false)
   const [telefoneVal, setTelefoneVal] = useState('')
+  // 14/10 — numa frota a mensagem vai para o telefone da EMPRESA (telefoneDestino),
+  // e esse número não tinha onde ser corrigido na ficha: a Ivanessa trocou o
+  // celular do caminhão (CYB0062) e o WhatsApp continuou abrindo no fixo da
+  // GUINDASPESO. Agora o contato e o telefone da frota se editam aqui mesmo.
+  const [editFoneEmpresa, setEditFoneEmpresa] = useState(false)
+  const [foneEmpresaVal, setFoneEmpresaVal] = useState('')
+  const [contatoEmpresaVal, setContatoEmpresaVal] = useState('')
   const [editAfericao, setEditAfericao] = useState(false)
   // O veículo é o que persiste; o dono muda. Quando o cara responde "não é mais
   // meu", a operadora corrige aqui mesmo — e a troca vai para o histórico.
@@ -384,6 +391,19 @@ export default function LeadDetail() {
     await supabase.from('caminhoneiros').update({ telefone: novo }).eq('id', lead.id)
     setLead((prev) => (prev ? { ...prev, telefone: novo } : prev))
     setEditTelefone(false)
+  }
+
+  async function salvarContatoEmpresa() {
+    if (!lead?.empresa) return
+    const fone = foneEmpresaVal.trim() || null
+    const contato = contatoEmpresaVal.trim() || null
+    const { error } = await supabase.from('empresas').update({ telefone: fone, contato }).eq('id', lead.empresa.id)
+    if (error) {
+      setAlerta(error.message)
+      return
+    }
+    setLead((prev) => (prev && prev.empresa ? { ...prev, empresa: { ...prev.empresa, telefone: fone, contato } } : prev))
+    setEditFoneEmpresa(false)
   }
 
   async function salvarProprietario() {
@@ -915,11 +935,56 @@ export default function LeadDetail() {
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-ink-4 mt-1">
-                  {lead.empresa.veiculos.length} caminhã
-                  {lead.empresa.veiculos.length === 1 ? 'o' : 'es'} na frota
-                  {lead.empresa.contato && ` · falar com ${lead.empresa.contato}`}
-                  {lead.empresa.telefone && ` · ${lead.empresa.telefone}`}
+                <p className="text-xs text-ink-4 mt-1 flex flex-wrap items-center gap-x-1 gap-y-1">
+                  <span>
+                    {lead.empresa.veiculos.length} caminhã
+                    {lead.empresa.veiculos.length === 1 ? 'o' : 'es'} na frota
+                  </span>
+                  {editFoneEmpresa ? (
+                    <span className="flex items-center gap-1">
+                      · falar com
+                      <input
+                        autoFocus
+                        value={contatoEmpresaVal}
+                        onChange={(e) => setContatoEmpresaVal(e.target.value)}
+                        placeholder="nome do contato"
+                        className="px-2 py-0.5 border border-line rounded-lg text-xs w-32 focus-ring outline-none bg-card"
+                      />
+                      <input
+                        value={foneEmpresaVal}
+                        onChange={(e) => setFoneEmpresaVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') salvarContatoEmpresa()
+                          if (e.key === 'Escape') setEditFoneEmpresa(false)
+                        }}
+                        inputMode="tel"
+                        placeholder="celular com DDD"
+                        className="px-2 py-0.5 border border-line rounded-lg text-xs w-36 focus-ring outline-none bg-card"
+                      />
+                      <button onClick={salvarContatoEmpresa} className="text-lucro hover:opacity-70" title="Salvar">
+                        <Check size={14} />
+                      </button>
+                      <button onClick={() => setEditFoneEmpresa(false)} className="text-ink-4 hover:text-ink" title="Cancelar">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      {lead.empresa.contato && ` · falar com ${lead.empresa.contato}`}
+                      {lead.empresa.telefone ? ` · ${lead.empresa.telefone}` : ' · sem telefone da empresa'}
+                      <button
+                        onClick={() => {
+                          setContatoEmpresaVal(lead.empresa?.contato ?? '')
+                          setFoneEmpresaVal(lead.empresa?.telefone ?? '')
+                          setEditFoneEmpresa(true)
+                        }}
+                        className="text-ink-4 hover:text-brand"
+                        title="Editar contato e telefone da empresa — é para este número que a mensagem da frota vai"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </span>
+                  )}
                 </p>
                 {lead.empresa.situacao === 'contrato' ? (
                   <p className="text-xs text-sky-200/80 mt-1.5">
@@ -927,8 +992,8 @@ export default function LeadDetail() {
                   </p>
                 ) : (
                   <p className="text-xs text-ink-4 mt-1.5">
-                    A mensagem vai para o contato da empresa e cobre os caminhões que vencem junto —
-                    uma conversa, não uma por placa.
+                    A mensagem vai para o <b className="text-ink-6">telefone da empresa</b> (acima, não o do caminhão) e cobre os caminhões que vencem junto —
+                    uma conversa, não uma por placa. Se for fixo ou estiver errado, corrija no lápis.
                   </p>
                 )}
               </div>
