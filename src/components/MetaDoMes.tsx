@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Lock, ShieldAlert, Target, Trophy, Wallet, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useRecarregarAoVoltar } from '../lib/aoVoltar'
 import { useAuth } from '../lib/AuthContext'
 
 // ── Meta do mês ──────────────────────────────────────────────────────────────
@@ -301,6 +302,8 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
   useEffect(() => {
     carregar()
   }, [carregar])
+  // 28/10 — mesma lição do Meu dia: ao voltar para a aba, os pontos se atualizam.
+  useRecarregarAoVoltar(carregar)
 
   // Trocou de mês ou de unidade: o formulário de fechamento começa do zero.
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ClipboardCheck, DoorOpen, ListChecks, ShieldCheck, Trophy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useRecarregarAoVoltar } from '../../lib/aoVoltar'
 import { num } from './ui'
 
 // ── Meu dia ──────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ function diasAtras(iso: string | null): string {
 export default function MeuDia({ unidadeId, modo = 'gestor' }: { unidadeId: string | null; modo?: 'gestor' | 'operadora' }) {
   const [dia, setDia] = useState<MeuDia | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null)
   const operadora = modo === 'operadora'
 
   const carregar = useCallback(async () => {
@@ -56,11 +58,14 @@ export default function MeuDia({ unidadeId, modo = 'gestor' }: { unidadeId: stri
       return
     }
     setDia(data as MeuDia)
+    setAtualizadoEm(new Date())
   }, [unidadeId, operadora])
 
   useEffect(() => {
     carregar()
   }, [carregar])
+  // Volta para a aba (ou para a janela) = números frescos.
+  useRecarregarAoVoltar(carregar)
 
   if (erro) return <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">{erro}</p>
   if (!dia) return <p className="text-sm text-ink-4">Carregando…</p>
@@ -70,6 +75,13 @@ export default function MeuDia({ unidadeId, modo = 'gestor' }: { unidadeId: stri
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
+      {/* Quando foi lido — e o botão para ler de novo. A Fernanda achou que a conquista
+          não tinha contado: era a tela de antes, parada. */}
+      <p className="md:col-span-2 -mt-2 text-[11px] text-ink-4 flex items-center gap-2">
+        {atualizadoEm && <>Números de {atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.</>}
+        <button type="button" onClick={carregar} className="text-brand font-bold hover:underline">Atualizar agora</button>
+        <span>— ao voltar para esta aba eles se atualizam sozinhos.</span>
+      </p>
       {/* 1. Pontos — o gestor vê a equipe; a operadora vê só a si e o total da unidade */}
       {operadora && dia.eu ? (
         <div className="card p-5">
