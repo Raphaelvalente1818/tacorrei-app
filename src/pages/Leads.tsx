@@ -82,6 +82,31 @@ function vencimento(iso: string | null): { texto: string; classe: string } | nul
   return { texto, classe }
 }
 
+// 28/10 — por que este caminhão não está na fila? O cartão "fora da fila" dizia
+// sempre "o vencimento ainda está longe" — e o DPE4I54 estava VENCIDO há 13 meses.
+// A frase agora é calculada do próprio lead, na mesma ordem da régua do banco:
+// sem data (sem tacógrafo) · vencido há mais que o piso · ainda longe da janela ·
+// fora de área · trocou de dono · sem telefone / telefone inválido · recusou.
+// Janela e piso são os da régua (45 dias / 12 meses) — iguais nas duas unidades.
+const JANELA_DIAS = 45
+const PISO_DIAS = 365
+function motivoForaDaFila(l: Caminhoneiro): string {
+  if (!l.data_ultima_afericao || !l.tem_tacografo) return 'Não aparece na lista porque não tem data de aferição — sem tacógrafo, até prova em contrário.'
+  const base = new Date(l.data_ultima_afericao.slice(0, 10) + 'T00:00:00')
+  const venc = new Date(base)
+  venc.setFullYear(venc.getFullYear() + VALIDADE_ANOS)
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const dias = Math.round((venc.getTime() - hoje.getTime()) / 86400000)
+  if (dias < -PISO_DIAS) return `Não aparece na lista porque venceu há ${Math.round(-dias / 30)} meses — mais que os 12 meses da régua: provavelmente vendido ou aferindo em outra praça.`
+  if (dias > JANELA_DIAS) return `Não aparece na lista porque o vencimento ainda está longe (faltam ${dias} dias; a fila mostra 45).`
+  if (l.fora_de_area_em) return 'Não aparece na lista porque foi marcado como "roda em outra praça".'
+  if (l.dono_trocou_em) return 'Não aparece na lista porque o dono informou que não é mais dele — aguarda a troca de proprietário.'
+  if (l.telefone_invalido_em || !l.telefone || l.telefone.replace(/\D/g, '').length < 10) return 'Não aparece na lista porque está sem telefone válido.'
+  if (l.status === 'recusado') return 'Não aparece na lista porque recusou na última conversa.'
+  return 'Está dentro do vencimento, mas fora da fila da operadora.'
+}
+
 // Guarda qual lead a operadora abriu por último. Ao voltar da ficha, a lista
 // rola até ele e o destaca — assim ela retoma a sequência de onde parou em vez
 // de cair no topo da página 1. Fica em sessionStorage (morre ao fechar a aba).
@@ -517,7 +542,7 @@ export default function Leads() {
               <p className="text-xs text-ink-4 mt-1">
                 {foraDaJanela.empresa_nome
                   ? 'Este caminhão pertence a uma empresa com contrato — o motorista pode ser qualquer um. Registre a aferição por aqui que o vencimento dela já se atualiza sozinho na próxima relação mensal.'
-                  : 'Não aparece na lista porque o vencimento ainda está longe. Se ele veio aferir agora, registre por aqui — não crie um lead novo, senão a placa fica duplicada.'}
+                  : `${motivoForaDaFila(foraDaJanela)} Se ele veio aferir agora, registre por aqui — não crie um lead novo, senão a placa fica duplicada.`}
               </p>
             </div>
             {placaAferida ? (
