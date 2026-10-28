@@ -157,6 +157,9 @@ export default function RegistrarAfericaoModal({
   }
 
   const temFaltas = !outroPosto && (faltaDoc || faltaChassi || (faltaFone && !perguntaFone) || faltaAno)
+  // 0114 — o cadastro perfeito no balcão vale 1 ponto quando o caminhão veio sozinho.
+  // A tela não sabe se houve contato nos 45 dias (o banco decide); diz o que é verdade sempre.
+  const avisoPonto = !outroPosto && (temFaltas || perguntaFone)
   const inputCls = 'w-full px-3 py-2 border border-line rounded-xl text-sm focus-ring outline-none'
 
   return (
@@ -209,6 +212,13 @@ export default function RegistrarAfericaoModal({
             </div>
           )}
 
+          {avisoPonto && (
+            <p className="text-[11px] text-teal-300 bg-teal-500/10 border border-teal-500/30 rounded-xl px-3 py-2 leading-snug">
+              <b>Cadastro perfeito vale 1 ponto</b> quando o caminhão veio sem ninguém ter ligado ou mandado mensagem antes: CPF ou CNPJ, chassi, RENAVAM de 11 dígitos
+              e o celular do dono confirmado (com WhatsApp). O ponto é de quem clica Aferido.
+            </p>
+          )}
+
           {/* 0112 — o que falta, em cima, com os campos. Some quando não falta nada
               (ou quando é aferição no concorrente: não há cadastro a aproveitar). */}
           {temFaltas && (
@@ -217,7 +227,7 @@ export default function RegistrarAfericaoModal({
                 <ClipboardCheck size={15} /> Ele está aqui — aproveite para completar o cadastro
               </div>
               <p className="text-[11px] text-ink-4 leading-snug">
-                Opcional. Faltam: {faltando.filter((f) => !(perguntaFone && f === 'Telefone confirmado')).join(', ')}. O que você preencher agora vale daqui a dois anos, quando este
+                Faltam: {faltando.filter((f) => !(perguntaFone && f === 'Telefone confirmado')).join(', ')}. O que você preencher agora vale daqui a dois anos, quando este
                 caminhão voltar para a fila.
               </p>
               {faltaDoc && (

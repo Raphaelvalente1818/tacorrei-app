@@ -30,6 +30,7 @@ type Parametros = {
   renovacao: number
   contrato: number
   bonus_empresa: number
+  balcao?: number
   janela_atribuicao_dias: number
   carencia_vencido_dias: number
   piso_carteira_pct: number
@@ -71,6 +72,8 @@ type Detalhe = {
   contato_em: string | null
   contato_canal: string | null
   contato_alvo: 'empresa' | 'placa' | null
+  // 0114 — ponto de balcão: veio sozinho, mas saiu com cadastro perfeito. 1 ponto para quem marcou.
+  balcao?: boolean
 }
 
 type Auditoria = {
@@ -650,6 +653,7 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
               <Regra cor={CLASSE_COR.renovacao} texto={`${CLASSE_LABEL.renovacao} · ${p.renovacao}`} />
               <Regra cor={CLASSE_COR.contrato} texto={`${CLASSE_LABEL.contrato} · ${p.contrato}`} />
               <Regra cor="bg-brand/15 text-brand border-brand/30" texto={`Empresa conquistada · +${p.bonus_empresa}`} />
+              {p.balcao !== undefined && <Regra cor="bg-teal-500/15 text-teal-300 border-teal-500/30" texto={`Balcão · veio sozinho com cadastro perfeito · ${p.balcao}`} />}
             </div>
             <p className="text-xs text-ink-4 mt-3">
               "Vencido" é certificado vencido há mais de {p.carencia_vencido_dias} dias, em qualquer posto.
@@ -882,6 +886,9 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                           {d.empresa_conquistada && (
                             <span className="badge bg-brand/15 text-brand border-brand/30 ml-1">empresa conquistada</span>
                           )}
+                          {d.balcao && (
+                            <span className="badge bg-teal-500/15 text-teal-300 border-teal-500/30 ml-1" title="Veio sozinho, mas saiu do balcão com cadastro perfeito: 1 ponto para quem marcou">balcão · cadastro perfeito</span>
+                          )}
                           <span className="block text-xs text-ink-4 mt-1">
                             {d.posto_anterior ? d.posto_anterior.slice(0, 28) : 'posto desconhecido'}
                             {d.venc_anterior ? ` · vencia ${fmtDia(d.venc_anterior)}` : ''}
@@ -896,6 +903,8 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                                 {d.contato_alvo === 'empresa' ? ' · com a empresa' : ''}
                               </span>
                             </>
+                          ) : d.balcao ? (
+                            <span className="text-teal-300">sem contato · cadastro perfeito</span>
                           ) : (
                             <span className="text-ink-4">veio sozinho</span>
                           )}
