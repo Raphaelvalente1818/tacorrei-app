@@ -32,6 +32,8 @@ type Parametros = {
   bonus_empresa: number
   balcao?: number
   janela_atribuicao_dias: number
+  antecedencia_dias?: number
+  antecedencia_desde?: string
   carencia_vencido_dias: number
   piso_carteira_pct: number
   fator_carteira: number
@@ -86,6 +88,10 @@ type Auditoria = {
   total: number
   operadora: string | null
   marcado_por: string | null
+  // 0115 — o relógio: quantas horas antes do clique em Aferido o contato foi registrado.
+  // null = veio sozinho. Abaixo de 24 h é a carona: o caminhão já estava no balcão.
+  contato_em?: string | null
+  contato_horas_antes?: number | null
   // 0113: resposta já gravada (responder_auditoria) — a auditoria pode ser feita aos poucos, até o dia 4
   resposta?: { ok: boolean; obs: string | null; em: string } | null
 }
@@ -643,7 +649,11 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
               Pontua a aferição feita no nosso posto, pelo que o caminhão <b className="text-ink-6">era antes</b> de vir.
               Vai para quem registrou contato no caminhão ou na empresa dele nos{' '}
               <b className="text-ink-6">{p.janela_atribuicao_dias} dias</b> anteriores — o contato mais recente leva.
-              Sem contato, ninguém pontua: o caminhão veio sozinho.
+              {p.antecedencia_dias !== undefined && p.antecedencia_dias > 0 && (
+                <> E o contato tem que ser de <b className="text-ink-6">dia anterior</b> ao da aferição: contato no mesmo dia é o caminhão já na porta, não conta
+                {p.antecedencia_desde ? ` (aferições a partir de ${fmtDia(p.antecedencia_desde)})` : ''}.</>
+              )}
+              {' '}Sem contato, ninguém pontua: o caminhão veio sozinho — a não ser que saia do balcão com cadastro perfeito (1 ponto).
             </p>
             <div className="flex flex-wrap gap-2">
               <Regra cor={CLASSE_COR.conquista_mista} texto={`${CLASSE_LABEL.conquista_mista} · ${p.conquista_mista}`} />
@@ -902,6 +912,14 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                                 {d.contato_canal === 'whatsapp' ? 'WhatsApp' : 'ligação'}
                                 {d.contato_alvo === 'empresa' ? ' · com a empresa' : ''}
                               </span>
+                              {(() => {
+                                const h = (new Date(d.registrado_em).getTime() - new Date(d.contato_em).getTime()) / 3600000
+                                return h < 24 ? (
+                                  <span className="block text-rose-300" title="O contato foi registrado menos de 24 h antes do clique em Aferido: o caminhão já estava na porta">
+                                    {h < 1 ? `${Math.round(h * 60)} min` : `${Math.round(h)} h`} antes do Aferido
+                                  </span>
+                                ) : null
+                              })()}
                             </>
                           ) : d.balcao ? (
                             <span className="text-teal-300">sem contato · cadastro perfeito</span>
@@ -961,6 +979,16 @@ export default function MetaDoMes({ modo = 'admin', unidadeId: unidadeDoPainel =
                             {a.operadora ?? 'sem atribuição'}{a.marcado_por ? ` · marcou: ${a.marcado_por}` : ''}
                           </span>
                           <span className="text-brand tabular-nums shrink-0">{num(a.total)}</span>
+                          {/* 0115 — o relógio do contato. Vermelho abaixo de 24 h: o contato foi
+                              registrado com o caminhão já no balcão (a carona de outubro). */}
+                          {a.operadora && a.contato_horas_antes !== null && a.contato_horas_antes !== undefined && (
+                            <span
+                              className={`badge shrink-0 ${a.contato_horas_antes < 24 ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : 'bg-card text-ink-4 border-line'}`}
+                              title="Quanto tempo antes do clique em Aferido o contato que levou o ponto foi registrado"
+                            >
+                              contato {a.contato_horas_antes < 1 ? `${Math.round(a.contato_horas_antes * 60)} min` : a.contato_horas_antes < 48 ? `${Math.round(a.contato_horas_antes)} h` : `${Math.round(a.contato_horas_antes / 24)} dias`} antes
+                            </span>
+                          )}
 
                           {emFechamento && (
                             <span className="ml-auto flex items-center gap-1.5">

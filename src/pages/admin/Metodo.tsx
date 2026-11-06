@@ -19,6 +19,7 @@ type Parametros = {
   bonus_empresa: number
   balcao: number
   janela_atribuicao_dias: number
+  antecedencia_dias: number
   carencia_vencido_dias: number
   piso_carteira_pct: number
   fator_carteira: number
@@ -34,6 +35,7 @@ const CAMPOS: { id: keyof Parametros; rotulo: string; ajuda: string; decimal?: b
   { id: 'bonus_empresa', rotulo: 'Bônus empresa conquistada', ajuda: 'Uma vez por empresa, para sempre.' },
   { id: 'balcao', rotulo: 'Balcão · veio sozinho com cadastro perfeito', ajuda: 'Sem contato prévio, só vale se sair do balcão com CPF/CNPJ, chassi, RENAVAM e celular confirmado. Vai para quem clicou Aferido (0114).' },
   { id: 'janela_atribuicao_dias', rotulo: 'Janela de atribuição (dias)', ajuda: 'Contato até tantos dias antes da aferição leva o ponto.' },
+  { id: 'antecedencia_dias', rotulo: 'Antecedência mínima do contato (dias)', ajuda: '1 = o contato tem que ser de dia anterior ao da aferição; contato no mesmo dia não atribui (vale para aferições desde 01/11/2026). 0 desliga.' },
   { id: 'carencia_vencido_dias', rotulo: 'Carência do vencido (dias)', ajuda: 'Antes disso, caminhão vencido do concorrente é conquista.' },
   { id: 'piso_carteira_pct', rotulo: 'Piso da carteira (%)', ajuda: 'Abaixo disso as conquistas do mês entram com o fator, e o bolo não sai.' },
   { id: 'fator_carteira', rotulo: 'Fator da carteira', ajuda: 'Ex.: 0,8.', decimal: true },
