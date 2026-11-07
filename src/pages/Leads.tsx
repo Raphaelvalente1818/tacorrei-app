@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, ChevronLeft, ChevronRight, CheckCircle2, Truck, MessageCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
@@ -161,6 +161,7 @@ export default function Leads() {
   // Filtro, busca e página moram na URL: voltar da ficha (ou dar refresh, ou usar
   // o botão do navegador) devolve a lista exatamente como estava.
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [filtro, setFiltro] = useState<FiltroLead>((params.get('f') as FiltroLead) || 'todos')
   // Mês de vencimento: a operadora trabalha um lote com sentido ("os que vencem em
   // outubro") em vez de "a página 7", que não quer dizer nada. Também dá para
@@ -791,8 +792,15 @@ export default function Leads() {
       {showNovo && (
         <NovoLeadModal
           onClose={() => setShowNovo(false)}
-          onCreated={() => {
+          onCreated={(id, aferiuAqui) => {
             setShowNovo(false)
+            // 07/11 — aferiu aqui: o Aferido já está registrado; a ficha é onde ela
+            // completa o cadastro (CPF/CNPJ, chassi, RENAVAM, celular) e garante o
+            // ponto de balcão. Sem isso o caminhão ficava "criado e esquecido".
+            if (aferiuAqui && id) {
+              navigate(`/leads/${id}`)
+              return
+            }
             carregar()
           }}
         />
