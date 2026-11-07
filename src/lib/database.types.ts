@@ -75,6 +75,11 @@ export interface Caminhoneiro {
   autorizou_whatsapp: boolean
   autorizado_em: string | null
   autorizado_por: string | null
+  // 0116 — última ligação ativa "não atendeu" que ainda vale (30 dias; na frota,
+  // a da empresa ou de qualquer caminhão dela). Calculado no banco, vem em
+  // `obter_lead`. Com isso o WhatsApp libera mesmo sem "autorizou": quase ninguém
+  // atende o celular, e exigir a autorização só travava quem registrava a verdade.
+  tentou_ligar_em?: string | null
   // Frota a que o caminhão pertence. Null = autônomo, um dono um caminhão.
   empresa_id: string | null
   // 0091 — a classe do telefone DESTE lead, calculada pelo banco:

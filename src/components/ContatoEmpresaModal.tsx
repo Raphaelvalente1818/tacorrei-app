@@ -35,7 +35,8 @@ const RESULTADOS: ResultadoLigacao[] = [
 // "Recusou" apaga a frota inteira da fila, e isso não pode ser surpresa.
 const EFEITO: Record<string, string> = {
   atendeu: 'ficam como Contatado',
-  nao_atendeu: 'ficam como Sem resposta',
+  // 0116 — a tentativa libera a mensagem para a frota (o telefone é a mesma pessoa)
+  nao_atendeu: 'ficam como Sem resposta — e a mensagem fica liberada na ficha de cada caminhão (ligação feita)',
   numero_invalido: 'ficam como Inválido',
   recusou: 'ficam como Recusado — a frota sai da fila',
   agendou: 'ficam como Contatado (o agendamento é de cada caminhão)',

@@ -48,11 +48,20 @@ function ehClienteDaCasa(lead: LeadComEmpresa): boolean {
   return lead.nosso ?? false
 }
 
-// Quem pode receber mensagem: cliente da casa, ou quem autorizou na ligação.
-// Na frota, o opt-in é da pessoa: basta um caminhão dela ter autorizado.
+// 0116 — a ligação foi tentada e ninguém atendeu (nos últimos 30 dias). A Fernanda:
+// "quase ninguém atende o celular". Exigir o "autorizou" só travava quem registrava
+// a verdade — em Santo André o "autorizou" virou o botão que se aperta para liberar
+// o WhatsApp. Agora "não atendeu" também libera; o que protege o número são as
+// outras travas (cota do dia, ritmo, uma por lead, uma por telefone), que não mudam.
+function tentouLigar(lead: LeadComEmpresa): boolean {
+  return !!lead.tentou_ligar_em
+}
+
+// Quem pode receber mensagem: cliente da casa, quem autorizou na ligação, ou quem
+// não atendeu a ligação. Na frota, o opt-in é da pessoa: basta um caminhão dela.
 function podeReceberMensagem(lead: LeadComEmpresa): boolean {
-  if (lead.empresa) return lead.empresa.ja_e_cliente || lead.autorizou_whatsapp
-  return ehClienteDaCasa(lead) || lead.autorizou_whatsapp
+  if (lead.empresa) return lead.empresa.ja_e_cliente || lead.autorizou_whatsapp || tentouLigar(lead)
+  return ehClienteDaCasa(lead) || lead.autorizou_whatsapp || tentouLigar(lead)
 }
 
 // 17/09 — a mensagem deste ciclo já saiu? O banco só aceita UMA por lead por
@@ -229,6 +238,12 @@ Estou à sua disposição para qualquer dúvida.${onde}`
   const posLigacao = !daCasa && lead.autorizou_whatsapp
     ? ' Conforme conversamos agora há pouco por telefone, segue por escrito.'
     : ''
+  // 0116 — ligação não atendida: quem recebe precisa entender POR QUE um desconhecido
+  // que sabe a placa dele está escrevendo. "Tentei ligar" é o que separa abordagem
+  // educada de abordagem fria — e é verdade, porque a tentativa é registrada antes.
+  const tentativa = !daCasa && !lead.autorizou_whatsapp && tentouLigar(lead)
+    ? `Tentei falar com ${frota ? 'vocês' : 'você'} por telefone e não consegui, então estou escrevendo por aqui.\n\n`
+    : ''
 
   if (info && info.vencido) {
     const meses = Math.floor((Date.now() - info.venc.getTime()) / (30 * 86400000))
@@ -252,7 +267,7 @@ ${rodape}`
     const convite = extras ? '' : `${cfg.conviteVencido}\n\n`
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
+${tentativa}Verificamos aqui que o certificado do tacógrafo ${doVeiculo} consta vencido desde ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
 
 ${convite}${rodape}`
   }
@@ -261,7 +276,7 @@ ${convite}${rodape}`
     const convite = extras ? '' : `${cfg.conviteAVencer}\n\n`
     return `${cabecalho}
 
-Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
+${tentativa}Verificamos aqui que o certificado do tacógrafo ${doVeiculo} vence em ${fmtDia(info.venc)}.${relacao}${posLigacao}${extras}
 
 ${convite}${rodape}`
   }
@@ -541,8 +556,8 @@ export default function LeadDetail() {
     if (!podeReceberMensagem(lead)) {
       setAlerta(
         lead.empresa
-          ? `Nenhum caminhão da ${lead.empresa.nome} aferiu conosco ainda — é frota do concorrente. Ligue para o contato e, se ele autorizar, marque "Autorizou receber mensagem".`
-          : 'Este caminhão fez a última aferição em outro posto — não temos relação com ele. Ligue primeiro e, se ele autorizar, marque "Autorizou receber mensagem" que o WhatsApp libera.'
+          ? `Nenhum caminhão da ${lead.empresa.nome} aferiu conosco ainda — é frota do concorrente. Ligue para o contato antes: se ele atender e autorizar, registre "Autorizou mensagem"; se não atender, registre "Não atendeu". Nos dois casos o WhatsApp libera.`
+          : 'Este caminhão fez a última aferição em outro posto — não temos relação com ele. Ligue antes: se ele atender e autorizar, registre "Autorizou mensagem"; se não atender, registre "Não atendeu". Nos dois casos o WhatsApp libera.'
       )
       return
     }
@@ -821,6 +836,15 @@ export default function LeadDetail() {
                   title="Alguém da frota autorizou receber mensagem numa ligação; o opt-in é da pessoa, não da placa"
                 >
                   Frota autorizou mensagem
+                </span>
+              ) : tentouLigar(lead) ? (
+                /* 0116 — a ligação foi tentada e não atendida: a mensagem está
+                   liberada e vai dizer isso ("tentei falar com você por telefone"). */
+                <span
+                  className="badge bg-teal-500/15 text-teal-300 border-teal-500/30"
+                  title="Ligação não atendida nos últimos 30 dias: a mensagem está liberada e avisa que você tentou ligar"
+                >
+                  Não atendeu em {new Date(lead.tentou_ligar_em!).toLocaleDateString('pt-BR')} — mensagem liberada
                 </span>
               ) : lead.posto_afericao ? (
                 <span className="badge bg-slate-500/15 text-slate-400 border-slate-500/30">
@@ -1135,7 +1159,7 @@ export default function LeadDetail() {
                 <button
                   onClick={() => marcarAutorizacao(true)}
                   className="flex items-center gap-1.5 border border-line bg-card text-ink-6 text-sm font-bold px-3.5 py-2 rounded-xl hover:bg-white/5 transition-colors"
-                  title="Marque depois de ligar, se ele disser que pode mandar mensagem"
+                  title='Marque depois de ligar, se ele disser que pode mandar mensagem. Se ninguém atendeu, registre "Não atendeu" no contato — também libera.'
                 >
                   <Phone size={16} /> Liguei — autorizou mensagem
                 </button>
@@ -1163,7 +1187,7 @@ export default function LeadDetail() {
                     : lead.whatsapp_invalido
                       ? 'Número marcado como sem WhatsApp'
                       : !podeReceberMensagem(lead)
-                        ? 'Cliente de concorrente: ligue primeiro e marque a autorização'
+                        ? 'Cliente de concorrente: ligue primeiro — "autorizou" ou "não atendeu" liberam a mensagem'
                         : 'Enviar WhatsApp (mensagem conforme a situação do lead)'
                 }
               >

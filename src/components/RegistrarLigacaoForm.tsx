@@ -16,6 +16,8 @@ import ConfirmarModal from './ConfirmarModal'
 // O WhatsApp de propósito NÃO é acionado por aqui: o envio tem seis travas (cota do dia,
 // intervalo, cooldown por telefone, relação) e foi mensagem fora de trava que derrubou o
 // número em 28/08. "Autorizou mensagem" apenas LIBERA o botão; quem envia é ela, na ficha.
+// 0116 — "Não atendeu" (ligação feita) também libera: quase ninguém atende o celular, e
+// exigir o "autorizou" só travava quem registrava a verdade.
 //
 // 14/09 (noite) — OS DOIS CAMPOS NASCEM VAZIOS. Eles vinham preenchidos com "Ligação feita" e
 // "Atendeu — conversamos", e o Emerson apontou o efeito em 14/09: a ficha dava a impressão
@@ -48,7 +50,10 @@ const DESFECHOS: Desfecho[] = [
   {
     valor: 'nao_atendeu',
     label: 'Não atendeu',
-    efeito: 'Fica como Sem resposta e volta na fila para você tentar de novo.',
+    // 0116 — quase ninguém atende o celular; a tentativa libera a mensagem, que
+    // vai dizer "tentei falar com você por telefone". Só vale para ligação feita.
+    efeito:
+      'Fica como Sem resposta e libera o botão Enviar WhatsApp na ficha — a mensagem vai avisar que você tentou ligar. Ela não sai agora: quem envia é você, respeitando a cota do dia.',
     status: 'sem_resposta',
   },
   {
