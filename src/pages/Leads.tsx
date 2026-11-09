@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, ChevronLeft, ChevronRight, CheckCircle2, Truck, MessageCircle } from 'lucide-react'
+import { Plus, Search, ChevronLeft, ChevronRight, CheckCircle2, Truck, MessageCircle, Copy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, useFiltroUnidade } from '../lib/AuthContext'
 import type { Caminhoneiro, StatusLead } from '../lib/database.types'
@@ -162,6 +162,17 @@ export default function Leads() {
   // o botão do navegador) devolve a lista exatamente como estava.
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  // Placa copiada há pouco (mostra "copiada" por 1,5 s no lugar do ícone).
+  const [placaCopiada, setPlacaCopiada] = useState<string | null>(null)
+  function copiarPlaca(id: string, placa: string) {
+    navigator.clipboard?.writeText(placa).then(
+      () => {
+        setPlacaCopiada(id)
+        window.setTimeout(() => setPlacaCopiada((atual) => (atual === id ? null : atual)), 1500)
+      },
+      () => undefined,
+    )
+  }
   const [filtro, setFiltro] = useState<FiltroLead>((params.get('f') as FiltroLead) || 'todos')
   // Mês de vencimento: a operadora trabalha um lote com sentido ("os que vencem em
   // outubro") em vez de "a página 7", que não quer dizer nada. Também dá para
@@ -572,6 +583,9 @@ export default function Leads() {
             <thead>
               <tr className="text-left text-ink-4 text-xs uppercase font-bold border-b border-line">
                 <th className="px-5 py-3">Nome</th>
+                {/* 09/11 — pedido da Fernanda: a placa na lista, para copiar e conferir
+                    no sistema de OS se o caminhão já aferiu, sem abrir ficha por ficha. */}
+                <th className="px-5 py-3">Placa</th>
                 <th className="px-5 py-3">Telefone</th>
                 <th className="px-5 py-3">Cidade/UF</th>
                 <th className="px-5 py-3">Relação</th>
@@ -604,6 +618,25 @@ export default function Leads() {
                       >
                         {lead.nome}
                       </Link>
+                    </td>
+                    <td className="px-5 py-3">
+                      {lead.placa_veiculo ? (
+                        <button
+                          type="button"
+                          onClick={() => copiarPlaca(lead.id, lead.placa_veiculo!)}
+                          className="inline-flex items-center gap-1.5 font-mono font-bold text-ink hover:text-brand-d"
+                          title="Clique para copiar a placa"
+                        >
+                          {lead.placa_veiculo}
+                          {placaCopiada === lead.id ? (
+                            <span className="text-[10px] font-sans font-bold text-emerald-300">copiada</span>
+                          ) : (
+                            <Copy size={12} className="text-ink-4" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-ink-4">—</span>
+                      )}
                     </td>
                     {/* 0091 — a operadora precisa saber ANTES de discar o que a
                         espera do outro lado. Fixo do RNTRC quase nunca atende, e

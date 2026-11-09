@@ -100,7 +100,13 @@ export default function NovoLeadModal({
       return
     }
     setSaving(true)
+    // O id nasce aqui, e não no banco: a operadora não tem permissão de LER o lead
+    // recém-criado (sem data ele está fora da régua dela), então um `returning id`
+    // seria recusado pelo RLS — foi o erro "new row violates row-level security
+    // policy" de 09/11. Com o id em mãos, o Aferido é registrado sem precisar ler.
+    const novoId = crypto.randomUUID()
     const registro: Record<string, unknown> = {
+      id: novoId,
       nome,
       telefone,
       cidade: cidade || null,
@@ -120,18 +126,13 @@ export default function NovoLeadModal({
     }
     // Admin grava a unidade escolhida. Operador não envia: o gatilho preenche com a dele.
     if (isAdmin && unidadeId) registro.unidade_id = unidadeId
-    const { data: criado, error } = await supabase
-      .from('caminhoneiros')
-      .insert(registro)
-      .select('id')
-      .single()
+    const { error } = await supabase.from('caminhoneiros').insert(registro)
     if (error) {
       setSaving(false)
       setError(error.message)
       return
     }
-    const novoId = (criado as { id: string } | null)?.id
-    if (ondeAferiu === 'aqui' && novoId) {
+    if (ondeAferiu === 'aqui') {
       const { error: errAf } = await supabase.rpc('registrar_afericao', {
         p_lead: novoId,
         p_data: ultimaAfericao,
